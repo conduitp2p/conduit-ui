@@ -101,6 +101,17 @@ body {
 }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
 
+/* Chunk progress bar */
+.chunk-bar {
+  display: flex; gap: 2px; margin-top: 6px; height: 8px; border-radius: 4px; overflow: hidden;
+}
+.chunk-bar .c {
+  flex: 1; background: #21262d; border-radius: 2px; transition: background 0.3s;
+}
+.chunk-bar .c.ok { background: #238636; }
+.chunk-bar .c.dl { background: #1f6feb; animation: pulse 1s infinite; }
+.chunk-bar .c.fail { background: #da3633; }
+
 /* Product thumbnail */
 .product .thumb {
   position: relative; width: 100%; height: 200px;
@@ -182,7 +193,7 @@ body {
   </div>
   <div class="row">
     <label>Seeder</label>
-    <input id="seederUrl" placeholder="http://seeder-ip:3002 (optional)">
+    <input id="seederUrl" placeholder="http://seeder-ip:3002 (comma-separate for multi-source)">
   </div>
   <div class="row">
     <label>Buyer</label>
@@ -190,9 +201,11 @@ body {
   </div>
   <div class="mode-row">
     <input type="radio" name="mode" id="modeDirect" value="direct" checked>
-    <label for="modeDirect">Direct (creator only)</label>
+    <label for="modeDirect">Direct</label>
     <input type="radio" name="mode" id="modeSeeder" value="seeder">
-    <label for="modeSeeder">Via seeder (two payments)</label>
+    <label for="modeSeeder">Seeder</label>
+    <input type="radio" name="mode" id="modeChunked" value="chunked">
+    <label for="modeChunked">Chunked (multi-source)</label>
   </div>
   <div id="connStatus" class="status">Not connected</div>
 </div>
@@ -230,6 +243,7 @@ body {
   <p id="resultText"></p>
   <img id="resultImg" class="decrypted-img" style="display:none" alt="Decrypted content">
   <video id="resultVideo" class="decrypted-img" style="display:none" controls playsinline></video>
+  <audio id="resultAudio" style="display:none;width:100%;margin-top:16px" controls></audio>
 </div>
 
 <script>
@@ -248,6 +262,8 @@ let seederListings = {}; // map: encrypted_hash -> { transport_price, encrypted_
 let lastOutputFile = null;
 let catalogItems = [];    // merged catalog (creator items annotated with seeder availability)
 let selectedItem = null;  // currently selected catalog item
+let chunkCount = 0;       // number of chunks for chunked mode
+let chunkStates = null;   // per-chunk state: '' | 'dl' | 'ok' | 'fail'
 
 function getMode() {
   return document.querySelector('input[name="mode"]:checked').value;
@@ -274,8 +290,24 @@ const STEPS_SEEDER = [
   { id: 'verify', text: 'Verifying plaintext H(F)' },
 ];
 
+const STEPS_CHUNKED = [
+  { id: 'cpay', text: 'Paying creator (content key K)' },
+  { id: 'chtlc', text: 'Content HTLC settling' },
+  { id: 'meta', text: 'Fetching chunk metadata' },
+  { id: 'bitfield', text: 'Querying seeder bitfields' },
+  { id: 'tpay', text: 'Paying seeders (transport K_S)' },
+  { id: 'thtlc', text: 'Transport HTLC settling' },
+  { id: 'chunks', text: 'Downloading & verifying chunks' },
+  { id: 'reassemble', text: 'Reassembling content' },
+  { id: 'decrypt', text: 'Decrypting with K' },
+  { id: 'verify', text: 'Verifying plaintext H(F)' },
+];
+
 function buildProgressSteps() {
-  const steps = getMode() === 'seeder' ? STEPS_SEEDER : STEPS_DIRECT;
+  chunkCount = 0;
+  chunkStates = null;
+  const m = getMode();
+  const steps = m === 'chunked' ? STEPS_CHUNKED : m === 'seeder' ? STEPS_SEEDER : STEPS_DIRECT;
   const container = document.getElementById('progress');
   container.innerHTML = steps.map((s, i) =>
     `<div class="step" id="step-${s.id}">
@@ -615,7 +647,17 @@ function updateBuyButton() {
   const sl = getSeederForItem(listing);
   const mode = getMode();
 
-  if (mode === 'seeder') {
+  if (mode === 'chunked') {
+    // Chunked mode: need at least one seeder URL
+    const su = (seederInput.value || '').trim();
+    if (su) {
+      btn.disabled = false;
+      btn.textContent = 'Buy Chunked (' + Number(listing.price) + ' sats + transport)';
+    } else {
+      btn.disabled = true;
+      btn.textContent = 'Enter seeder URL(s) for chunked mode';
+    }
+  } else if (mode === 'seeder') {
     if (sl) {
       btn.disabled = false;
       const totalPrice = Number(listing.price) + Number(sl.transport_price);
@@ -664,12 +706,7 @@ function showProduct(info) {
 
   document.getElementById('product').className = 'product visible';
 
-  // Auto-select mode based on seeder availability
-  if (sl && seederUrl) {
-    document.getElementById('modeSeeder').checked = true;
-  } else {
-    document.getElementById('modeDirect').checked = true;
-  }
+  // Don't auto-switch mode — user controls it via radio buttons
 
   updateBuyButton();
 
@@ -679,6 +716,7 @@ function showProduct(info) {
   document.getElementById('result').className = 'result';
   document.getElementById('resultImg').style.display = 'none';
   document.getElementById('resultVideo').style.display = 'none';
+  document.getElementById('resultAudio').style.display = 'none';
   lastOutputFile = null;
 }
 
@@ -727,7 +765,9 @@ async function doBuy() {
   const mode = getMode();
   const sl = getSeederForItem(listing);
 
-  if (mode === 'seeder' && sl) {
+  if (mode === 'chunked') {
+    doBuyChunked();
+  } else if (mode === 'seeder' && sl) {
     doBuyViaSeeder(sl);
   } else {
     doBuyDirect();
@@ -811,8 +851,49 @@ async function doBuyViaSeeder(sl) {
   });
 }
 
+async function doBuyChunked() {
+  setStep('cpay', 'active');
+
+  // Parse seeder URLs (comma or newline separated)
+  const seederUrls = (seederInput.value || '').split(/[,\n]/)
+    .map(s => s.trim().replace(/\/+$/, ''))
+    .filter(s => s.length > 0);
+
+  if (seederUrls.length === 0) {
+    showResult(false, 'No seeder URLs provided');
+    return;
+  }
+
+  const baseName = (listing.file_name || 'content').replace(/\.[^.]+$/, '');
+  const ext = (listing.file_name || '').split('.').pop() || 'bin';
+  const outputFile = 'decrypted-' + Date.now() + '-' + baseName + '.' + ext;
+  lastOutputFile = outputFile;
+
+  const body = {
+    mode: 'chunked',
+    content_invoice: listing.bolt11,
+    encrypted_hash: listing.encrypted_hash || '',
+    hash: listing.hash,
+    output: '/tmp/' + outputFile,
+    seeder_urls: seederUrls,
+  };
+
+  try {
+    const r = await fetch(buyerUrl + '/api/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const res = await r.json();
+    console.log('Chunked buy started:', res);
+  } catch (err) {
+    setStep('cpay', 'fail');
+    showResult(false, 'Failed to reach buyer node: ' + err.message);
+  }
+}
+
 // ---------------------------------------------------------------------------
-// Buyer events — update progress (handles both modes)
+// Buyer events — update progress (handles all modes)
 // ---------------------------------------------------------------------------
 
 function handleBuyerEvent(ev) {
@@ -829,17 +910,14 @@ function handleBuyerEvent(ev) {
       showResult(false, 'Failed to fetch file: ' + (ev.data.error || 'unknown'));
       break;
     case 'BUY_ERROR':
-      setStep('fetch', 'fail', ev.data.message || 'Error');
       showResult(false, ev.data.message || 'Buy error');
       break;
 
-    // --- Countdown (both modes) ---
+    // --- Countdown (all modes) ---
     case 'COUNTDOWN':
-      if (getMode() === 'seeder') {
-        // Seeder mode: creator payment happens first
+      if (getMode() === 'seeder' || getMode() === 'chunked') {
         setStep('cpay', 'active', 'Paying creator in ' + ev.data.seconds + '...');
       } else {
-        // Direct mode: fetch is done, now paying
         setStep('fetch', 'done');
         setStep('pay', 'active', 'Paying in ' + ev.data.seconds + '...');
       }
@@ -862,8 +940,8 @@ function handleBuyerEvent(ev) {
 
     // --- Seeder mode: transport payment ---
     case 'TRANSPORT_PAYING':
-      setStep('fetch', 'done');
-      setStep('tpay', 'active', 'Paying seeder...');
+      if (getMode() !== 'chunked') setStep('fetch', 'done');
+      setStep('tpay', 'active', ev.data.seeder ? ('Paying ' + ev.data.seeder + '...') : 'Paying seeder...');
       break;
     case 'TRANSPORT_PAYMENT_SENT':
       setStep('tpay', 'done', 'Transport HTLC in flight');
@@ -871,7 +949,11 @@ function handleBuyerEvent(ev) {
       break;
     case 'TRANSPORT_PAID':
       setStep('thtlc', 'done', 'K_S: ' + (ev.data.preimage_ks ? ev.data.preimage_ks.slice(0, 16) + '...' : ''));
-      setStep('unwrap', 'active');
+      if (getMode() === 'chunked') {
+        setStep('chunks', 'active', 'Downloading chunks...');
+      } else {
+        setStep('unwrap', 'active');
+      }
       break;
     case 'TRANSPORT_PAYMENT_FAILED':
       setStep('tpay', 'fail', ev.data.reason || 'Transport payment failed');
@@ -907,14 +989,70 @@ function handleBuyerEvent(ev) {
       break;
     case 'CONTENT_PAID':
       setStep('chtlc', 'done', 'K: ' + (ev.data.preimage_k ? ev.data.preimage_k.slice(0, 16) + '...' : ''));
-      // Next step is fetching from seeder (fetch step activates on FETCHING_ENC event)
+      if (getMode() === 'chunked') {
+        setStep('meta', 'active', 'Fetching chunk info...');
+      }
       break;
     case 'CONTENT_PAYMENT_FAILED':
       setStep('cpay', 'fail', ev.data.reason || 'Content payment failed');
       showResult(false, 'Content payment failed. No money lost to seeders.');
       break;
 
-    // --- Decrypt + verify (both modes) ---
+    // --- Chunked mode events ---
+    case 'CHUNK_META_RECEIVED':
+      setStep('meta', 'done', ev.data.chunk_count + ' chunks, ' + ev.data.seeders + ' seeder(s)');
+      setStep('bitfield', 'active');
+      // Build chunk progress bar
+      if (ev.data.chunk_count > 0) {
+        chunkCount = ev.data.chunk_count;
+        chunkStates = new Array(chunkCount).fill('');
+        updateChunkBar();
+      }
+      break;
+    case 'BITFIELD_RECEIVED':
+      setStep('bitfield', 'active', (ev.data.chunks_available || 0) + '/' + (ev.data.total || 0) + ' from ' + (ev.data.seeder || ''));
+      break;
+    case 'CHUNK_PLAN':
+      setStep('bitfield', 'done', 'Plan ready');
+      setStep('tpay', 'active');
+      break;
+    case 'TRANSPORT_INVOICE_RECEIVED':
+      setStep('tpay', 'active', 'Invoice from ' + (ev.data.seeder || '') + ' (' + (ev.data.chunks || []).length + ' chunks)');
+      break;
+
+    case 'CHUNK_DOWNLOADED':
+      setStep('chunks', 'active', ev.data.progress || '');
+      if (typeof ev.data.chunk_index === 'number' && chunkStates) {
+        chunkStates[ev.data.chunk_index] = 'ok';
+        updateChunkBar();
+      }
+      break;
+    case 'CHUNK_VERIFIED':
+      if (typeof ev.data.chunk_index === 'number' && chunkStates) {
+        chunkStates[ev.data.chunk_index] = 'ok';
+        updateChunkBar();
+      }
+      break;
+    case 'CHUNK_VERIFICATION_FAILED':
+    case 'CHUNK_DOWNLOAD_FAILED':
+      if (typeof ev.data.chunk_index === 'number' && chunkStates) {
+        chunkStates[ev.data.chunk_index] = 'fail';
+        updateChunkBar();
+      }
+      setStep('chunks', 'fail', ev.data.message || 'Chunk failed');
+      showResult(false, ev.data.message || 'Chunk download/verification failed');
+      break;
+    case 'CHUNKS_DECRYPTED':
+      setStep('chunks', 'done', ev.data.chunk_count + ' chunks verified');
+      setStep('reassemble', 'active');
+      break;
+    case 'CONTENT_REASSEMBLED':
+      setStep('reassemble', 'done', ev.data.bytes + ' bytes');
+      setStep('decrypt', 'done', ev.data.bytes + ' bytes');
+      setStep('verify', 'active');
+      break;
+
+    // --- Decrypt + verify (all modes) ---
     case 'CONTENT_DECRYPTED':
       setStep('decrypt', 'done', ev.data.bytes + ' bytes');
       setStep('verify', 'active');
@@ -944,29 +1082,40 @@ function handleBuyerEvent(ev) {
 function showResultWithImage(data) {
   const filePath = data.path || '';
   const fileName = filePath.split('/').pop();
-  showResult(true, 'Content verified and saved (' + data.bytes + ' bytes)');
+  const chunks = data.chunks || 0;
+  const seeders = data.seeders || 0;
+  const extra = chunks > 0 ? ' — ' + chunks + ' chunks' + (seeders > 0 ? ' from ' + seeders + ' seeder(s)' : '') : '';
+  showResult(true, 'Content verified and saved (' + data.bytes + ' bytes' + extra + ')');
 
   const contentUrl = buyerUrl + '/api/decrypted/' + encodeURIComponent(fileName);
   const isVideo = /\.(mp4|webm|mov)$/i.test(fileName);
+  const isAudio = /\.(mp3|wav|ogg|opus|flac|aac|m4a)$/i.test(fileName);
   const imgEl = document.getElementById('resultImg');
   const vidEl = document.getElementById('resultVideo');
+  const audEl = document.getElementById('resultAudio');
 
-  if (isVideo) {
-    imgEl.style.display = 'none';
+  // Hide all media elements first
+  imgEl.style.display = 'none';
+  vidEl.style.display = 'none';
+  audEl.style.display = 'none';
+
+  if (isAudio) {
+    audEl.src = contentUrl;
+    audEl.style.display = 'block';
+  } else if (isVideo) {
     vidEl.src = contentUrl;
     vidEl.style.display = 'block';
     vidEl.onerror = () => { vidEl.style.display = 'none'; };
   } else {
-    vidEl.style.display = 'none';
     imgEl.src = contentUrl;
     imgEl.style.display = 'block';
     imgEl.onerror = () => { imgEl.style.display = 'none'; };
   }
 
-  // Update product thumbnail — show video or image preview
+  // Update product thumbnail
   const thumbImg = document.getElementById('prodThumbImg');
+  const lockOverlay = document.querySelector('.lock-overlay');
   if (isVideo) {
-    // Replace thumbnail img with a small inline video preview
     const thumbVid = document.createElement('video');
     thumbVid.src = contentUrl;
     thumbVid.autoplay = true;
@@ -976,11 +1125,19 @@ function showResultWithImage(data) {
     thumbVid.style.width = '100%';
     thumbVid.style.borderRadius = '8px';
     thumbImg.parentNode.replaceChild(thumbVid, thumbImg);
-    document.querySelector('.lock-overlay').style.display = 'none';
+    if (lockOverlay) lockOverlay.style.display = 'none';
+  } else if (isAudio) {
+    // Show a music note icon for audio
+    thumbImg.src = 'data:image/svg+xml,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="%23238636" rx="12"/>' +
+      '<text x="32" y="46" text-anchor="middle" font-size="36" fill="white">&#9835;</text></svg>'
+    );
+    thumbImg.style.filter = 'none';
+    if (lockOverlay) lockOverlay.textContent = '🎵';
   } else {
     thumbImg.src = contentUrl;
     thumbImg.style.filter = 'none';
-    document.querySelector('.lock-overlay').style.display = 'none';
+    if (lockOverlay) lockOverlay.style.display = 'none';
   }
 }
 
@@ -999,6 +1156,23 @@ function setStep(name, state, detail) {
 }
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function updateChunkBar() {
+  if (!chunkStates) return;
+  let bar = document.getElementById('chunkBar');
+  if (!bar) {
+    // Insert chunk bar into the chunks step detail area
+    const detail = document.getElementById('detail-chunks');
+    if (!detail) return;
+    bar = document.createElement('div');
+    bar.id = 'chunkBar';
+    bar.className = 'chunk-bar';
+    detail.parentNode.insertBefore(bar, detail.nextSibling);
+  }
+  bar.innerHTML = chunkStates.map((s, i) =>
+    '<div class="c ' + s + '" title="Chunk ' + i + '"></div>'
+  ).join('');
+}
 
 function showResult(success, text) {
   const el = document.getElementById('result');
