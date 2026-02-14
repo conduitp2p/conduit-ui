@@ -1,0 +1,1014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conduit — Buy</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117; color: #e6edf3;
+  font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 14px; min-height: 100vh;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 40px 20px;
+}
+
+/* Setup bar */
+.setup {
+  width: 100%; max-width: 520px;
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 16px 20px; margin-bottom: 24px;
+}
+.setup h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8b949e; margin-bottom: 10px; }
+.setup .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.setup input {
+  flex: 1; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+  padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 13px;
+}
+.setup input:focus { border-color: #58a6ff; outline: none; }
+.setup label { color: #8b949e; font-size: 12px; min-width: 55px; }
+.setup .status { font-size: 12px; color: #484f58; margin-top: 4px; }
+.setup .status.ok { color: #3fb950; }
+.setup .mode-row { margin-top: 10px; display: flex; gap: 12px; align-items: center; }
+.setup .mode-row label { min-width: auto; cursor: pointer; }
+.setup .mode-row input[type="radio"] { accent-color: #58a6ff; }
+
+/* Product card */
+.product {
+  width: 100%; max-width: 520px;
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 24px; margin-bottom: 24px;
+  display: none;
+}
+.product.visible { display: block; }
+.product h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.product .meta { color: #8b949e; font-size: 13px; margin-bottom: 16px; }
+.product .price-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 12px 0; border-top: 1px solid #21262d;
+}
+.product .price {
+  font-size: 24px; font-weight: 700; color: #f0883e;
+}
+.product .price small { font-size: 13px; font-weight: 400; color: #8b949e; }
+.product .hash {
+  font-family: 'SF Mono', 'Fira Code', monospace; font-size: 11px;
+  color: #79c0ff; word-break: break-all; padding: 8px 0;
+  border-top: 1px solid #21262d;
+}
+.product .hash-label { color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
+
+/* Buy button */
+.buy-btn {
+  width: 100%; padding: 12px; border: none; border-radius: 8px;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+  font-family: inherit; margin-top: 16px;
+  background: #238636; color: #fff;
+  transition: background 0.15s;
+}
+.buy-btn:hover { background: #2ea043; }
+.buy-btn:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+
+/* Progress */
+.progress {
+  width: 100%; max-width: 520px;
+  display: none;
+}
+.progress.visible { display: block; }
+.step {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 0; border-bottom: 1px solid #21262d;
+  font-size: 13px;
+}
+.step:last-child { border-bottom: none; }
+.step .icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; flex-shrink: 0;
+  background: #21262d; color: #484f58;
+}
+.step.active .icon { background: #1f6feb; color: #fff; animation: pulse 1.5s infinite; }
+.step.done .icon { background: #238636; color: #fff; }
+.step.fail .icon { background: #da3633; color: #fff; }
+.step .text { color: #8b949e; }
+.step.active .text { color: #e6edf3; }
+.step.done .text { color: #3fb950; }
+.step .detail {
+  font-family: 'SF Mono', monospace; font-size: 11px; color: #484f58;
+  margin-top: 2px; word-break: break-all;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+/* Product thumbnail */
+.product .thumb {
+  position: relative; width: 100%; height: 200px;
+  background: #21262d; border-radius: 8px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 16px;
+}
+.product .thumb img {
+  max-width: 100%; max-height: 100%; object-fit: contain;
+  filter: blur(18px) brightness(0.4);
+  transition: filter 0.5s;
+}
+.product .thumb .lock-overlay {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 48px; color: rgba(255,255,255,0.25);
+  pointer-events: none;
+}
+
+/* Result */
+.result {
+  width: 100%; max-width: 520px;
+  background: #0d1117; border: 2px solid #238636; border-radius: 10px;
+  padding: 24px; text-align: center; margin-top: 24px;
+  display: none;
+}
+.result.visible { display: block; }
+.result.fail { border-color: #da3633; }
+.result h2 { font-size: 16px; color: #3fb950; margin-bottom: 8px; }
+.result.fail h2 { color: #f85149; }
+.result p { color: #8b949e; font-size: 13px; }
+.result .decrypted-img {
+  margin-top: 16px; max-width: 100%; border-radius: 8px;
+  border: 1px solid #30363d;
+}
+
+/* Catalog grid */
+.catalog-card {
+  background: #161b22; border: 1px solid #30363d; border-radius: 8px;
+  padding: 14px 18px; margin-bottom: 10px; cursor: pointer;
+  display: flex; justify-content: space-between; align-items: center;
+  transition: border-color 0.15s;
+}
+.catalog-card:hover { border-color: #58a6ff; }
+.catalog-card.selected { border-color: #f0883e; background: #1c2128; }
+.catalog-card .cc-name { font-weight: 600; font-size: 14px; }
+.catalog-card .cc-meta { font-size: 12px; color: #8b949e; margin-top: 2px; }
+.catalog-card .cc-price { font-size: 18px; font-weight: 700; color: #f0883e; white-space: nowrap; }
+.catalog-card .cc-price small { font-size: 12px; font-weight: 400; color: #8b949e; }
+.cc-seeder-badge {
+  display: inline-block; font-size: 10px; font-weight: 600; color: #d29922;
+  background: rgba(210,153,34,0.15); border: 1px solid rgba(210,153,34,0.3);
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.cc-direct-badge {
+  display: inline-block; font-size: 10px; font-weight: 600; color: #484f58;
+  background: rgba(72,79,88,0.15); border: 1px solid rgba(72,79,88,0.3);
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.catalog-empty {
+  color: #484f58; font-size: 13px; font-style: italic; padding: 20px 0; text-align: center;
+}
+</style>
+</head>
+<body>
+
+<!-- Setup: node URLs -->
+<div class="setup">
+  <h2>Connection</h2>
+  <div class="row">
+    <label>Registry</label>
+    <input id="registryUrl" placeholder="http://registry-ip:3003 (optional — auto-discovers nodes)">
+  </div>
+  <div class="row">
+    <label>Creator</label>
+    <input id="creatorUrl" placeholder="http://creator-ip:3000">
+  </div>
+  <div class="row">
+    <label>Seeder</label>
+    <input id="seederUrl" placeholder="http://seeder-ip:3002 (optional)">
+  </div>
+  <div class="row">
+    <label>Buyer</label>
+    <input id="buyerUrl" placeholder="http://buyer-ip:3001">
+  </div>
+  <div class="mode-row">
+    <input type="radio" name="mode" id="modeDirect" value="direct" checked>
+    <label for="modeDirect">Direct (creator only)</label>
+    <input type="radio" name="mode" id="modeSeeder" value="seeder">
+    <label for="modeSeeder">Via seeder (two payments)</label>
+  </div>
+  <div id="connStatus" class="status">Not connected</div>
+</div>
+
+<!-- Product catalog (populated from GET /api/catalog on connect) -->
+<div id="catalogSection" style="width:100%;max-width:520px;display:none">
+  <div style="font-size:11px;text-transform:uppercase;letter-spacing:1.5px;color:#8b949e;margin-bottom:10px;">Catalog</div>
+  <div id="catalogGrid"></div>
+</div>
+
+<!-- Selected product card (appears when user picks a catalog item) -->
+<div id="product" class="product">
+  <div class="thumb" id="prodThumb">
+    <img id="prodThumbImg" src="" alt="Encrypted content">
+    <div class="lock-overlay">&#128274;</div>
+  </div>
+  <h1 id="prodName">—</h1>
+  <div class="meta" id="prodMeta"></div>
+  <div>
+    <span class="hash-label">Content hash</span>
+    <div class="hash" id="prodHash">—</div>
+  </div>
+  <div class="price-row">
+    <div class="price" id="prodPrice">— <small>sats</small></div>
+  </div>
+  <button class="buy-btn" id="buyBtn" onclick="doBuy()" disabled>Buy</button>
+</div>
+
+<!-- Progress steps (dynamically populated based on mode) -->
+<div id="progress" class="progress"></div>
+
+<!-- Result -->
+<div id="result" class="result">
+  <h2 id="resultTitle"></h2>
+  <p id="resultText"></p>
+  <img id="resultImg" class="decrypted-img" style="display:none" alt="Decrypted content">
+  <video id="resultVideo" class="decrypted-img" style="display:none" controls playsinline></video>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+let registryUrl = '';
+let creatorUrl = '';
+let seederUrl = '';
+let buyerUrl = '';
+let creatorEs = null;
+let seederEs = null;
+let buyerEs = null;
+let listing = null;
+let seederListings = {}; // map: encrypted_hash -> { transport_price, encrypted_hash } — populated from seeder catalog
+let lastOutputFile = null;
+let catalogItems = [];    // merged catalog (creator items annotated with seeder availability)
+let selectedItem = null;  // currently selected catalog item
+
+function getMode() {
+  return document.querySelector('input[name="mode"]:checked').value;
+}
+
+// Step definitions per mode
+const STEPS_DIRECT = [
+  { id: 'fetch', text: 'Fetching encrypted file' },
+  { id: 'pay', text: 'Sending payment' },
+  { id: 'htlc', text: 'HTLC settling' },
+  { id: 'decrypt', text: 'Decrypting content' },
+  { id: 'verify', text: 'Verifying integrity' },
+];
+
+const STEPS_SEEDER = [
+  { id: 'cpay', text: 'Paying creator (content key K)' },
+  { id: 'chtlc', text: 'Content HTLC settling' },
+  { id: 'fetch', text: 'Fetching wrapped file from seeder' },
+  { id: 'tpay', text: 'Paying seeder (transport K_S)' },
+  { id: 'thtlc', text: 'Transport HTLC settling' },
+  { id: 'unwrap', text: 'Unwrapping transport layer' },
+  { id: 'encverify', text: 'Verifying encrypted content H(E)' },
+  { id: 'decrypt', text: 'Decrypting content with K' },
+  { id: 'verify', text: 'Verifying plaintext H(F)' },
+];
+
+function buildProgressSteps() {
+  const steps = getMode() === 'seeder' ? STEPS_SEEDER : STEPS_DIRECT;
+  const container = document.getElementById('progress');
+  container.innerHTML = steps.map((s, i) =>
+    `<div class="step" id="step-${s.id}">
+      <div class="icon">${i + 1}</div>
+      <div>
+        <div class="text">${s.text}</div>
+        <div class="detail" id="detail-${s.id}"></div>
+      </div>
+    </div>`
+  ).join('');
+}
+buildProgressSteps();
+
+// Rebuild steps and update buy button when mode changes
+document.querySelectorAll('input[name="mode"]').forEach(r =>
+  r.addEventListener('change', () => { buildProgressSteps(); updateBuyButton(); })
+);
+
+// ---------------------------------------------------------------------------
+// Connection
+// ---------------------------------------------------------------------------
+const registryInput = document.getElementById('registryUrl');
+const creatorInput = document.getElementById('creatorUrl');
+const seederInput = document.getElementById('seederUrl');
+const buyerInput = document.getElementById('buyerUrl');
+const statusEl = document.getElementById('connStatus');
+
+function tryConnect() {
+  const cu = (creatorInput.value || '').replace(/\/+$/, '');
+  const su = (seederInput.value || '').replace(/\/+$/, '');
+  const bu = (buyerInput.value || '').replace(/\/+$/, '');
+  if (!cu || !bu) return;
+
+  // Close old connections
+  if (creatorEs) creatorEs.close();
+  if (seederEs) seederEs.close();
+  if (buyerEs) buyerEs.close();
+  creatorEs = seederEs = buyerEs = null;
+
+  creatorUrl = cu;
+  seederUrl = su;
+  buyerUrl = bu;
+  statusEl.textContent = 'Connecting...';
+  statusEl.className = 'status';
+
+  const hasSeeder = !!su;
+  const total = hasSeeder ? 3 : 2;
+  let ready = 0;
+  function checkReady() {
+    ready++;
+    if (ready >= total) {
+      statusEl.textContent = 'Connected to ' + (hasSeeder ? 'all 3 nodes' : 'creator + buyer');
+      statusEl.className = 'status ok';
+      // Fetch catalog once connected
+      fetchCatalog();
+    }
+  }
+
+  // Creator SSE
+  creatorEs = new EventSource(cu + '/api/events');
+  creatorEs.onopen = checkReady;
+  creatorEs.onerror = () => { statusEl.textContent = 'Creator unreachable'; statusEl.className = 'status'; };
+  creatorEs.onmessage = (e) => { try { handleCreatorEvent(JSON.parse(e.data)); } catch(err) {} };
+
+  // Buyer SSE
+  buyerEs = new EventSource(bu + '/api/events');
+  buyerEs.onopen = checkReady;
+  buyerEs.onerror = () => { statusEl.textContent = 'Buyer unreachable'; statusEl.className = 'status'; };
+  buyerEs.onmessage = (e) => { try { handleBuyerEvent(JSON.parse(e.data)); } catch(err) {} };
+
+  // Seeder SSE (always connect if URL provided — mode only affects buy flow)
+  if (hasSeeder) {
+    seederEs = new EventSource(su + '/api/events');
+    seederEs.onopen = checkReady;
+    seederEs.onerror = () => { statusEl.textContent = 'Seeder unreachable'; statusEl.className = 'status'; };
+    seederEs.onmessage = (e) => { try { handleSeederEvent(JSON.parse(e.data)); } catch(err) {} };
+  }
+}
+
+// Registry: fetch catalog from registry and show it before any node connections
+function tryRegistryConnect() {
+  const ru = (registryInput.value || '').replace(/\/+$/, '');
+  if (!ru) return;
+  registryUrl = ru;
+  statusEl.textContent = 'Fetching registry catalog...';
+  statusEl.className = 'status';
+  fetchRegistryCatalog();
+}
+
+registryInput.addEventListener('blur', tryRegistryConnect);
+registryInput.addEventListener('change', tryRegistryConnect);
+
+creatorInput.addEventListener('blur', tryConnect);
+seederInput.addEventListener('blur', tryConnect);
+buyerInput.addEventListener('blur', tryConnect);
+creatorInput.addEventListener('change', tryConnect);
+seederInput.addEventListener('change', tryConnect);
+buyerInput.addEventListener('change', tryConnect);
+
+// ---------------------------------------------------------------------------
+// Creator events — build the product listing
+// ---------------------------------------------------------------------------
+let pendingListing = {};
+
+function handleCreatorEvent(ev) {
+  switch (ev.event_type) {
+    case 'INVOICE_CREATED':
+      pendingListing.bolt11 = ev.data.bolt11;
+      pendingListing.price = ev.data.amount_sats;
+      pendingListing.payment_hash = ev.data.payment_hash;
+      pendingListing.enc_filename = ev.data.enc_filename || '';
+      pendingListing.file_name = ev.data.file_name || '';
+      pendingListing.encrypted_hash = ev.data.encrypted_hash || '';
+      if (ev.data.content_hash) pendingListing.hash = ev.data.content_hash;
+      break;
+    case 'HASH_COMPUTED':
+      pendingListing.hash = ev.data.hash;
+      break;
+    case 'CONTENT_ENCRYPTED':
+      pendingListing.bytes = ev.data.plaintext_bytes;
+      break;
+    case 'ENCRYPTED_FILE_SAVED':
+      if (ev.data.encrypted_hash) pendingListing.encrypted_hash = ev.data.encrypted_hash;
+      break;
+    case 'WAITING_FOR_PAYMENT':
+      if (pendingListing.bolt11 && pendingListing.hash) {
+        showProduct(pendingListing);
+      }
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Seeder events — capture transport invoice
+// ---------------------------------------------------------------------------
+
+function handleSeederEvent(ev) {
+  // Seeder events are now mainly for the timeline / progress tracking
+  // Catalog data comes from GET /api/catalog, not SSE
+  switch (ev.event_type) {
+    case 'CONTENT_SEEDED':
+      // New content added to seeder — refresh catalog to pick it up
+      fetchCatalog();
+      break;
+    case 'WAITING_FOR_TRANSPORT_PAYMENT':
+    case 'TRANSPORT_INVOICE_CREATED':
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Catalog fetch & render
+// ---------------------------------------------------------------------------
+
+async function fetchCatalog() {
+  try {
+    // Fetch creator catalog (always required)
+    const cr = await fetch(creatorUrl + '/api/catalog');
+    const cdata = await cr.json();
+    catalogItems = cdata.items || [];
+
+    // Fetch seeder catalog if URL provided
+    seederListings = {};
+    if (seederUrl) {
+      try {
+        const sr = await fetch(seederUrl + '/api/catalog');
+        const sdata = await sr.json();
+        (sdata.items || []).forEach(item => {
+          if (item.encrypted_hash && item.transport_price > 0) {
+            seederListings[item.encrypted_hash] = {
+              transport_price: item.transport_price,
+              encrypted_hash: item.encrypted_hash,
+            };
+          }
+        });
+      } catch (e) {
+        console.warn('Seeder catalog unavailable:', e);
+      }
+    }
+
+    renderCatalog();
+  } catch (e) {
+    console.error('Failed to fetch catalog:', e);
+    document.getElementById('catalogGrid').innerHTML =
+      '<div class="catalog-empty">Failed to load catalog</div>';
+  }
+}
+
+// Registry-backed catalog fetch: populates catalog from the central registry
+// instead of individual node catalogs. Node connections happen on item selection.
+async function fetchRegistryCatalog() {
+  try {
+    const resp = await fetch(registryUrl + '/api/listings');
+    const data = await resp.json();
+    const items = data.items || [];
+
+    // Map registry listings to the same shape as node catalog items
+    catalogItems = items.map(item => ({
+      content_hash: item.content_hash,
+      file_name: item.file_name,
+      price_sats: item.price_sats,
+      encrypted_hash: item.encrypted_hash,
+      size_bytes: item.size_bytes,
+      enc_filename: '', // will be resolved on discover
+      transport_price: 0, // will be resolved on discover
+      // Registry-specific fields for auto-connect
+      _creator_address: item.creator_address || '',
+      _creator_ln_address: item.creator_ln_address || '',
+    }));
+
+    // Clear seeder listings — they'll be populated per-item on discover
+    seederListings = {};
+
+    statusEl.textContent = 'Registry: ' + items.length + ' listing(s) found. Select content, then enter Buyer URL.';
+    statusEl.className = 'status ok';
+
+    renderCatalog();
+  } catch (e) {
+    console.error('Failed to fetch registry catalog:', e);
+    statusEl.textContent = 'Registry unreachable';
+    statusEl.className = 'status';
+  }
+}
+
+// When using registry, discover creator + seeders for selected content
+async function registryDiscover(contentHash) {
+  if (!registryUrl) return;
+  try {
+    const resp = await fetch(registryUrl + '/api/discover/' + contentHash);
+    const data = await resp.json();
+
+    if (data.listing && data.listing.creator_address) {
+      const addr = data.listing.creator_address;
+      const proto = addr.startsWith('http') ? '' : 'http://';
+      creatorInput.value = proto + addr;
+    }
+
+    if (data.seeders && data.seeders.length > 0) {
+      const best = data.seeders[0]; // pick first seeder
+      const addr = best.seeder_address;
+      const proto = addr.startsWith('http') ? '' : 'http://';
+      seederInput.value = proto + addr;
+
+      // Populate seeder listing for this content
+      if (data.listing && data.listing.encrypted_hash) {
+        seederListings[data.listing.encrypted_hash] = {
+          transport_price: best.transport_price,
+          encrypted_hash: data.listing.encrypted_hash,
+        };
+      }
+    }
+
+    // Auto-connect if buyer URL is set
+    const bu = (buyerInput.value || '').replace(/\/+$/, '');
+    if (bu) {
+      tryConnect();
+    } else {
+      statusEl.textContent = 'Creator/seeder discovered. Enter Buyer URL to connect.';
+      statusEl.className = 'status ok';
+    }
+  } catch (e) {
+    console.warn('Registry discover failed:', e);
+  }
+}
+
+function renderCatalog() {
+  const grid = document.getElementById('catalogGrid');
+  const section = document.getElementById('catalogSection');
+
+  if (catalogItems.length === 0) {
+    grid.innerHTML = '<div class="catalog-empty">No content registered yet. Use register command on the creator node.</div>';
+    section.style.display = 'block';
+    return;
+  }
+
+  grid.innerHTML = catalogItems.map((item, i) => {
+    const ext = (item.file_name || '').split('.').pop().toLowerCase() || '';
+    const isVid = ['mp4','webm','mov'].includes(ext);
+    const typeIcon = isVid ? '&#9654; ' : '';
+    const typeLabel = typeIcon + (ext.toUpperCase() || 'FILE');
+    const sl = seederListings[item.encrypted_hash];
+    const seederBadge = sl
+      ? '<span class="cc-seeder-badge">via seeder +' + Number(sl.transport_price).toLocaleString() + '</span>'
+      : '<span class="cc-direct-badge">direct only</span>';
+    return `<div class="catalog-card" id="cc-${i}" onclick="selectCatalogItem(${i})">
+      <div>
+        <div class="cc-name">${esc(item.file_name || 'Unknown')} ${seederBadge}</div>
+        <div class="cc-meta">${typeLabel} · ${Number(item.size_bytes || 0).toLocaleString()} bytes</div>
+      </div>
+      <div class="cc-price">${Number(item.price_sats || 0).toLocaleString()} <small>sats</small></div>
+    </div>`;
+  }).join('');
+  section.style.display = 'block';
+}
+
+function selectCatalogItem(index) {
+  const item = catalogItems[index];
+  if (!item) return;
+  selectedItem = item;
+
+  // Highlight selected card
+  document.querySelectorAll('.catalog-card').forEach(el => el.classList.remove('selected'));
+  const card = document.getElementById('cc-' + index);
+  if (card) card.classList.add('selected');
+
+  // If using registry, discover creator/seeder addresses for this item
+  if (registryUrl && item.content_hash) {
+    registryDiscover(item.content_hash);
+  }
+
+  // Show product card with catalog data
+  showProduct({
+    file_name: item.file_name,
+    hash: item.content_hash,
+    encrypted_hash: item.encrypted_hash,
+    price: item.price_sats,
+    bytes: item.size_bytes,
+    enc_filename: item.enc_filename,
+    // No bolt11 yet — will be fetched on buy
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Show product
+// ---------------------------------------------------------------------------
+
+// Look up seeder listing for a given item (by encrypted_hash)
+function getSeederForItem(item) {
+  if (!item || !item.encrypted_hash) return null;
+  return seederListings[item.encrypted_hash] || null;
+}
+
+// Update buy button state based on current listing and mode
+function updateBuyButton() {
+  if (!listing) return;
+  const btn = document.getElementById('buyBtn');
+  const sl = getSeederForItem(listing);
+  const mode = getMode();
+
+  if (mode === 'seeder') {
+    if (sl) {
+      btn.disabled = false;
+      const totalPrice = Number(listing.price) + Number(sl.transport_price);
+      btn.textContent = 'Buy via Seeder (' + totalPrice + ' sats total)';
+    } else {
+      btn.disabled = true;
+      btn.textContent = 'Seeder unavailable for this item';
+    }
+  } else {
+    btn.disabled = false;
+    btn.textContent = 'Buy (' + Number(listing.price) + ' sats)';
+  }
+}
+
+function showProduct(info) {
+  listing = info;
+  const displayName = info.file_name || 'Encrypted Content';
+  document.getElementById('prodName').textContent = displayName;
+  document.getElementById('prodMeta').textContent = (info.bytes || '?') + ' bytes';
+  document.getElementById('prodHash').textContent = info.hash;
+
+  const sl = getSeederForItem(info);
+  if (sl) {
+    const totalPrice = Number(info.price) + Number(sl.transport_price);
+    document.getElementById('prodPrice').innerHTML =
+      Number(info.price).toLocaleString() + ' <small>sats content</small>' +
+      ' + ' + Number(sl.transport_price).toLocaleString() + ' <small>sats transport</small>';
+  } else {
+    document.getElementById('prodPrice').innerHTML = Number(info.price).toLocaleString() + ' <small>sats</small>';
+  }
+
+  const thumbImg = document.getElementById('prodThumbImg');
+  const fileExt = (info.file_name || '').split('.').pop().toLowerCase();
+  const isVideoFile = ['mp4','webm','mov'].includes(fileExt);
+  if (isVideoFile) {
+    thumbImg.src = 'data:image/svg+xml,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="%23333" rx="12"/>' +
+      '<polygon points="24,16 48,32 24,48" fill="%23ccc"/></svg>'
+    );
+  } else {
+    thumbImg.src = 'data:image/svg+xml,' + encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" fill="%23f7931a" rx="12"/>' +
+      '<text x="32" y="44" text-anchor="middle" font-size="36" fill="white" font-family="Arial">&#x20bf;</text></svg>'
+    );
+  }
+
+  document.getElementById('product').className = 'product visible';
+
+  // Auto-select mode based on seeder availability
+  if (sl && seederUrl) {
+    document.getElementById('modeSeeder').checked = true;
+  } else {
+    document.getElementById('modeDirect').checked = true;
+  }
+
+  updateBuyButton();
+
+  // Reset progress & result
+  buildProgressSteps();
+  document.getElementById('progress').className = 'progress';
+  document.getElementById('result').className = 'result';
+  document.getElementById('resultImg').style.display = 'none';
+  document.getElementById('resultVideo').style.display = 'none';
+  lastOutputFile = null;
+}
+
+// ---------------------------------------------------------------------------
+// Buy flow
+// ---------------------------------------------------------------------------
+
+async function doBuy() {
+  if (!listing || !listing.hash) return;
+
+  const btn = document.getElementById('buyBtn');
+  btn.disabled = true;
+  btn.textContent = 'Requesting invoice...';
+  buildProgressSteps();
+  document.getElementById('progress').className = 'progress visible';
+
+  // If we don't have a bolt11 yet, request one from the catalog
+  if (!listing.bolt11 && listing.hash) {
+    try {
+      const r = await fetch(creatorUrl + '/api/invoice/' + listing.hash, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const inv = await r.json();
+      if (inv.error) {
+        showResult(false, 'Failed to get invoice: ' + inv.error);
+        btn.disabled = false;
+        btn.textContent = 'Buy';
+        return;
+      }
+      // Merge invoice data into listing
+      listing.bolt11 = inv.bolt11;
+      listing.payment_hash = inv.payment_hash;
+      listing.enc_filename = inv.enc_filename || listing.enc_filename;
+      listing.encrypted_hash = inv.encrypted_hash || listing.encrypted_hash;
+    } catch (e) {
+      showResult(false, 'Failed to request invoice: ' + e.message);
+      btn.disabled = false;
+      btn.textContent = 'Buy';
+      return;
+    }
+  }
+
+  btn.textContent = 'Buying...';
+  const mode = getMode();
+  const sl = getSeederForItem(listing);
+
+  if (mode === 'seeder' && sl) {
+    doBuyViaSeeder(sl);
+  } else {
+    doBuyDirect();
+  }
+}
+
+function doBuyDirect() {
+  setStep('fetch', 'active');
+  const encFilename = listing.enc_filename || 'unknown.enc';
+  const encUrl = creatorUrl + '/api/enc/' + encFilename;
+  const baseName = encFilename.replace(/\.enc$/, '');
+  const outputFile = 'decrypted-' + Date.now() + '-' + baseName;
+  lastOutputFile = outputFile;
+
+  const body = {
+    invoice: listing.bolt11,
+    enc_url: encUrl,
+    hash: listing.hash,
+    output: '/tmp/' + outputFile,
+  };
+
+  fetch(buyerUrl + '/api/buy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(r => r.json()).then(res => {
+    console.log('Direct buy started:', res);
+  }).catch(err => {
+    setStep('fetch', 'fail');
+    showResult(false, 'Failed to reach buyer node: ' + err.message);
+  });
+}
+
+async function doBuyViaSeeder(sl) {
+  setStep('cpay', 'active');
+
+  // 1. Request fresh transport invoice from seeder (on-demand)
+  let transportInv;
+  try {
+    const r = await fetch(seederUrl + '/api/transport-invoice/' + (listing.encrypted_hash || sl.encrypted_hash), {
+      method: 'POST',
+    });
+    transportInv = await r.json();
+    if (transportInv.error) {
+      setStep('cpay', 'fail');
+      showResult(false, 'Seeder invoice failed: ' + transportInv.error);
+      return;
+    }
+  } catch (e) {
+    setStep('cpay', 'fail');
+    showResult(false, 'Failed to reach seeder: ' + e.message);
+    return;
+  }
+
+  // 2. Build buy request with fresh invoice data
+  const wrappedFilename = transportInv.wrapped_filename || 'unknown.wrapped';
+  const wrappedUrl = seederUrl + '/api/wrapped/' + wrappedFilename;
+  const baseName = (listing.file_name || 'content').replace(/\.[^.]+$/, '');
+  const ext = (listing.file_name || '').split('.').pop() || 'bin';
+  const outputFile = 'decrypted-' + Date.now() + '-' + baseName + '.' + ext;
+  lastOutputFile = outputFile;
+
+  const body = {
+    wrapped_url: wrappedUrl,
+    transport_invoice: transportInv.bolt11,
+    content_invoice: listing.bolt11,
+    encrypted_hash: listing.encrypted_hash || sl.encrypted_hash || '',
+    hash: listing.hash,
+    output: '/tmp/' + outputFile,
+  };
+
+  fetch(buyerUrl + '/api/buy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  }).then(r => r.json()).then(res => {
+    console.log('Seeder buy started:', res);
+  }).catch(err => {
+    setStep('fetch', 'fail');
+    showResult(false, 'Failed to reach buyer node: ' + err.message);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Buyer events — update progress (handles both modes)
+// ---------------------------------------------------------------------------
+
+function handleBuyerEvent(ev) {
+  switch (ev.event_type) {
+    // --- Fetch (both modes) ---
+    case 'FETCHING_ENC':
+      setStep('fetch', 'active', 'Downloading...');
+      break;
+    case 'ENC_FETCHED':
+      setStep('fetch', 'done', ev.data.bytes + ' bytes downloaded');
+      break;
+    case 'FETCH_FAILED':
+      setStep('fetch', 'fail', ev.data.error || 'Download failed');
+      showResult(false, 'Failed to fetch file: ' + (ev.data.error || 'unknown'));
+      break;
+    case 'BUY_ERROR':
+      setStep('fetch', 'fail', ev.data.message || 'Error');
+      showResult(false, ev.data.message || 'Buy error');
+      break;
+
+    // --- Countdown (both modes) ---
+    case 'COUNTDOWN':
+      if (getMode() === 'seeder') {
+        // Seeder mode: creator payment happens first
+        setStep('cpay', 'active', 'Paying creator in ' + ev.data.seconds + '...');
+      } else {
+        // Direct mode: fetch is done, now paying
+        setStep('fetch', 'done');
+        setStep('pay', 'active', 'Paying in ' + ev.data.seconds + '...');
+      }
+      break;
+    case 'PAYING_INVOICE':
+      setStep('pay', 'active', 'Invoice sent');
+      break;
+    case 'PAYMENT_SENT':
+      setStep('pay', 'done', 'HTLC in flight');
+      setStep('htlc', 'active', ev.data.payment_hash ? ev.data.payment_hash.slice(0, 16) + '...' : '');
+      break;
+    case 'PAYMENT_CONFIRMED':
+      setStep('htlc', 'done', 'Preimage: ' + (ev.data.preimage ? ev.data.preimage.slice(0, 16) + '...' : ''));
+      setStep('decrypt', 'active');
+      break;
+    case 'PAYMENT_FAILED':
+      setStep('pay', 'fail', ev.data.reason || 'Payment failed');
+      showResult(false, 'Payment failed: ' + (ev.data.reason || 'unknown'));
+      break;
+
+    // --- Seeder mode: transport payment ---
+    case 'TRANSPORT_PAYING':
+      setStep('fetch', 'done');
+      setStep('tpay', 'active', 'Paying seeder...');
+      break;
+    case 'TRANSPORT_PAYMENT_SENT':
+      setStep('tpay', 'done', 'Transport HTLC in flight');
+      setStep('thtlc', 'active', ev.data.payment_hash ? ev.data.payment_hash.slice(0, 16) + '...' : '');
+      break;
+    case 'TRANSPORT_PAID':
+      setStep('thtlc', 'done', 'K_S: ' + (ev.data.preimage_ks ? ev.data.preimage_ks.slice(0, 16) + '...' : ''));
+      setStep('unwrap', 'active');
+      break;
+    case 'TRANSPORT_PAYMENT_FAILED':
+      setStep('tpay', 'fail', ev.data.reason || 'Transport payment failed');
+      showResult(false, 'Transport payment failed');
+      break;
+
+    // --- Seeder mode: unwrap + verify H(E) ---
+    case 'CONTENT_UNWRAPPED':
+      setStep('unwrap', 'done', ev.data.encrypted_bytes + ' bytes');
+      setStep('encverify', 'active');
+      break;
+    case 'ENCRYPTED_HASH_VERIFIED':
+      if (ev.data.matches) {
+        setStep('encverify', 'done', 'H(E) match');
+        setStep('cpay', 'active');
+      } else {
+        setStep('encverify', 'fail', 'H(E) mismatch!');
+        showResult(false, 'Encrypted content hash mismatch after unwrap.');
+      }
+      break;
+    case 'ENCRYPTED_HASH_MISMATCH':
+      setStep('encverify', 'fail', 'H(E) mismatch!');
+      showResult(false, 'Encrypted content hash mismatch.');
+      break;
+
+    // --- Seeder mode: content payment (happens FIRST — before fetch) ---
+    case 'CONTENT_PAYING':
+      setStep('cpay', 'active', 'Paying creator...');
+      break;
+    case 'CONTENT_PAYMENT_SENT':
+      setStep('cpay', 'done', 'Content HTLC in flight');
+      setStep('chtlc', 'active', ev.data.payment_hash ? ev.data.payment_hash.slice(0, 16) + '...' : '');
+      break;
+    case 'CONTENT_PAID':
+      setStep('chtlc', 'done', 'K: ' + (ev.data.preimage_k ? ev.data.preimage_k.slice(0, 16) + '...' : ''));
+      // Next step is fetching from seeder (fetch step activates on FETCHING_ENC event)
+      break;
+    case 'CONTENT_PAYMENT_FAILED':
+      setStep('cpay', 'fail', ev.data.reason || 'Content payment failed');
+      showResult(false, 'Content payment failed. No money lost to seeders.');
+      break;
+
+    // --- Decrypt + verify (both modes) ---
+    case 'CONTENT_DECRYPTED':
+      setStep('decrypt', 'done', ev.data.bytes + ' bytes');
+      setStep('verify', 'active');
+      break;
+    case 'HASH_VERIFIED':
+      if (ev.data.matches) {
+        setStep('verify', 'done', 'SHA-256 match');
+      } else {
+        setStep('verify', 'fail', 'Hash mismatch!');
+        showResult(false, 'Content hash mismatch — file may be corrupted.');
+      }
+      break;
+    case 'HASH_MISMATCH':
+      setStep('verify', 'fail', 'Hash mismatch!');
+      showResult(false, 'Content hash mismatch.');
+      break;
+    case 'FILE_SAVED':
+      showResultWithImage(ev.data);
+      break;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Result + image display
+// ---------------------------------------------------------------------------
+
+function showResultWithImage(data) {
+  const filePath = data.path || '';
+  const fileName = filePath.split('/').pop();
+  showResult(true, 'Content verified and saved (' + data.bytes + ' bytes)');
+
+  const contentUrl = buyerUrl + '/api/decrypted/' + encodeURIComponent(fileName);
+  const isVideo = /\.(mp4|webm|mov)$/i.test(fileName);
+  const imgEl = document.getElementById('resultImg');
+  const vidEl = document.getElementById('resultVideo');
+
+  if (isVideo) {
+    imgEl.style.display = 'none';
+    vidEl.src = contentUrl;
+    vidEl.style.display = 'block';
+    vidEl.onerror = () => { vidEl.style.display = 'none'; };
+  } else {
+    vidEl.style.display = 'none';
+    imgEl.src = contentUrl;
+    imgEl.style.display = 'block';
+    imgEl.onerror = () => { imgEl.style.display = 'none'; };
+  }
+
+  // Update product thumbnail — show video or image preview
+  const thumbImg = document.getElementById('prodThumbImg');
+  if (isVideo) {
+    // Replace thumbnail img with a small inline video preview
+    const thumbVid = document.createElement('video');
+    thumbVid.src = contentUrl;
+    thumbVid.autoplay = true;
+    thumbVid.loop = true;
+    thumbVid.muted = true;
+    thumbVid.playsInline = true;
+    thumbVid.style.width = '100%';
+    thumbVid.style.borderRadius = '8px';
+    thumbImg.parentNode.replaceChild(thumbVid, thumbImg);
+    document.querySelector('.lock-overlay').style.display = 'none';
+  } else {
+    thumbImg.src = contentUrl;
+    thumbImg.style.filter = 'none';
+    document.querySelector('.lock-overlay').style.display = 'none';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// UI helpers
+// ---------------------------------------------------------------------------
+
+function setStep(name, state, detail) {
+  const el = document.getElementById('step-' + name);
+  if (!el) return; // step not in current mode
+  el.className = 'step ' + state;
+  if (detail !== undefined) {
+    const d = document.getElementById('detail-' + name);
+    if (d) d.textContent = detail;
+  }
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function showResult(success, text) {
+  const el = document.getElementById('result');
+  el.className = 'result visible' + (success ? '' : ' fail');
+  document.getElementById('resultTitle').textContent = success ? 'Purchase Complete' : 'Purchase Failed';
+  document.getElementById('resultText').textContent = text;
+  const btn = document.getElementById('buyBtn');
+  btn.textContent = success ? 'Bought' : 'Buy';
+  btn.disabled = success;
+}
+</script>
+</body>
+</html>
