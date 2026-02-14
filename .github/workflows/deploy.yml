@@ -11,22 +11,53 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Deploy buyer-ui to buyer node
+      # Deploy unified dashboard + buyer-ui to all nodes
+      - name: Deploy UI to creator node
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.CREATOR_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "dashboard.html,buyer-ui.html"
+          target: /root/conduit-ui/
+          overwrite: true
+
+      - name: Deploy UI to buyer node
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.BUYER_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "buyer-ui.html"
+          source: "dashboard.html,buyer-ui.html"
           target: /root/conduit-ui/
           overwrite: true
 
-      - name: Deploy buyer-ui to registry node
+      - name: Deploy UI to registry node
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.REGISTRY_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: "buyer-ui.html"
+          source: "dashboard.html,buyer-ui.html"
+          target: /root/conduit-ui/
+          overwrite: true
+
+      - name: Deploy UI to seeder node (AWS)
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SEEDER_HOST }}
+          username: ubuntu
+          key: ${{ secrets.SEEDER_SSH_KEY }}
+          source: "dashboard.html,buyer-ui.html"
+          target: /home/ubuntu/conduit-ui/
+          overwrite: true
+
+      - name: Deploy UI to advertiser node
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.ADVERTISER_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "dashboard.html,buyer-ui.html"
           target: /root/conduit-ui/
           overwrite: true

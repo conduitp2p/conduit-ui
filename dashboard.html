@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conduit</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<style>
+/* ================================================================ */
+/* Reset & base                                                      */
+/* ================================================================ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117; color: #e6edf3;
+  font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 14px; min-height: 100vh;
+}
+a { color: #58a6ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ================================================================ */
+/* Layout                                                            */
+/* ================================================================ */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; border-bottom: 1px solid #21262d;
+  background: #161b22;
+}
+.header h1 { font-size: 16px; font-weight: 700; color: #f0883e; letter-spacing: 0.02em; }
+.header .node-id { font-family: 'SF Mono', monospace; font-size: 11px; color: #8b949e; }
+
+.wallet-bar {
+  display: flex; gap: 24px; padding: 10px 24px; border-bottom: 1px solid #21262d;
+  background: #0d1117; font-size: 13px; flex-wrap: wrap; align-items: center;
+}
+.wallet-bar .stat { display: flex; gap: 6px; align-items: center; }
+.wallet-bar .stat-label { color: #8b949e; }
+.wallet-bar .stat-value { color: #e6edf3; font-weight: 600; }
+.wallet-bar .stat-value.btc { color: #f0883e; }
+
+.tab-bar {
+  display: flex; border-bottom: 1px solid #21262d; background: #161b22;
+  overflow-x: auto;
+}
+.tab-bar button {
+  background: none; border: none; color: #8b949e; font-family: inherit;
+  font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;
+  white-space: nowrap; transition: color 0.15s, border-color 0.15s;
+}
+.tab-bar button:hover { color: #e6edf3; }
+.tab-bar button.active { color: #e6edf3; border-bottom-color: #f0883e; font-weight: 600; }
+
+.tab-content { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
+.tab-content.active { display: block; }
+
+/* ================================================================ */
+/* Settings panel                                                    */
+/* ================================================================ */
+.settings {
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 16px 20px; margin-bottom: 24px;
+}
+.settings h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8b949e; margin-bottom: 10px; }
+.settings .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.settings label { color: #8b949e; font-size: 12px; min-width: 80px; }
+.settings input {
+  flex: 1; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+  padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 13px;
+}
+.settings input:focus { border-color: #58a6ff; outline: none; }
+.settings .status { font-size: 12px; color: #484f58; margin-top: 4px; }
+.settings .status.ok { color: #3fb950; }
+
+/* ================================================================ */
+/* Cards & tables                                                    */
+/* ================================================================ */
+.card {
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 20px; margin-bottom: 16px;
+}
+.card h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #e6edf3; }
+.card .empty { color: #484f58; font-size: 13px; font-style: italic; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; color: #8b949e; font-weight: 500; padding: 8px 10px;
+  border-bottom: 1px solid #21262d; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+td { padding: 8px 10px; border-bottom: 1px solid #161b22; }
+tr:hover td { background: #1c2128; }
+.mono { font-family: 'SF Mono', monospace; font-size: 11px; color: #8b949e; word-break: break-all; }
+.price { color: #f0883e; font-weight: 600; }
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 9999px;
+  font-size: 11px; font-weight: 600;
+}
+.badge-green { background: #1a2f1a; color: #3fb950; }
+.badge-yellow { background: #2f2a1a; color: #d29922; }
+.badge-red { background: #2f1a1a; color: #f85149; }
+.badge-blue { background: #1a1f2f; color: #58a6ff; }
+
+/* ================================================================ */
+/* Buttons                                                           */
+/* ================================================================ */
+.btn {
+  padding: 8px 16px; border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: background 0.15s;
+}
+.btn-primary { background: #238636; color: #fff; }
+.btn-primary:hover { background: #2ea043; }
+.btn-primary:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+.btn-secondary { background: #21262d; color: #e6edf3; }
+.btn-secondary:hover { background: #30363d; }
+
+/* ================================================================ */
+/* Steps / progress                                                  */
+/* ================================================================ */
+.step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px; margin-bottom: 4px;
+  font-size: 13px; color: #8b949e; background: #161b22;
+}
+.step .num { min-width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: #21262d; color: #484f58; }
+.step.active { color: #e6edf3; background: #1c2128; }
+.step.active .num { background: #1f6feb; color: #fff; }
+.step.done { color: #3fb950; }
+.step.done .num { background: #1a2f1a; color: #3fb950; }
+.step.fail { color: #f85149; }
+.step.fail .num { background: #2f1a1a; color: #f85149; }
+.step .detail { font-size: 11px; color: #8b949e; margin-left: auto; }
+
+/* ================================================================ */
+/* Events timeline                                                   */
+/* ================================================================ */
+.event-item {
+  display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid #161b22;
+  font-size: 12px;
+}
+.event-item .time { color: #484f58; min-width: 70px; font-family: 'SF Mono', monospace; font-size: 11px; }
+.event-item .role-tag {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; min-width: 60px; text-align: center;
+}
+.event-item .role-tag.creator { background: #1a2f1a; color: #3fb950; }
+.event-item .role-tag.buyer { background: #1a1f2f; color: #58a6ff; }
+.event-item .role-tag.seeder { background: #2f2a1a; color: #d29922; }
+.event-item .role-tag.advertiser { background: #2f1a2f; color: #bc8cff; }
+.event-item .type { color: #e6edf3; font-weight: 500; }
+.event-item .payload { color: #8b949e; font-family: 'SF Mono', monospace; font-size: 11px; word-break: break-all; }
+.event-filter { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.event-filter button {
+  background: #21262d; border: 1px solid #30363d; color: #8b949e;
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;
+}
+.event-filter button.active { background: #30363d; color: #e6edf3; border-color: #58a6ff; }
+
+/* ================================================================ */
+/* Buy modes                                                         */
+/* ================================================================ */
+.mode-row { display: flex; gap: 12px; margin: 10px 0; align-items: center; }
+.mode-row label { color: #8b949e; font-size: 13px; cursor: pointer; }
+.mode-row input[type="radio"] { accent-color: #58a6ff; }
+
+/* ================================================================ */
+/* Catalog                                                           */
+/* ================================================================ */
+.catalog-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; transition: background 0.1s;
+}
+.catalog-item:hover { background: #1c2128; }
+.catalog-item.selected { border-color: #58a6ff; background: #1c2128; }
+.catalog-item .name { font-weight: 500; }
+.catalog-item .meta { font-size: 12px; color: #8b949e; }
+
+/* ================================================================ */
+/* Ad overlay                                                        */
+/* ================================================================ */
+#adOverlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); z-index: 1000;
+  flex-direction: column; align-items: center; justify-content: center;
+}
+#adOverlay video { max-width: 80%; max-height: 60%; border-radius: 8px; }
+#adTimer { color: #f0883e; font-size: 20px; font-weight: 700; margin-top: 16px; }
+#adProgressBar {
+  width: 60%; height: 4px; background: #21262d; border-radius: 2px; margin-top: 8px; overflow: hidden;
+}
+#adProgressBar .fill { height: 100%; background: #f0883e; width: 0; transition: width 1s linear; }
+
+/* ================================================================ */
+/* Preview                                                           */
+/* ================================================================ */
+.preview-container { margin-top: 16px; text-align: center; }
+.preview-container audio, .preview-container video { max-width: 100%; border-radius: 8px; }
+.preview-container img { max-width: 100%; max-height: 300px; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<!-- ============================================================== -->
+<!-- Header                                                          -->
+<!-- ============================================================== -->
+<div class="header">
+  <h1>CONDUIT</h1>
+  <span class="node-id" id="nodeId">connecting...</span>
+</div>
+
+<!-- ============================================================== -->
+<!-- Wallet bar (always visible)                                     -->
+<!-- ============================================================== -->
+<div class="wallet-bar" id="walletBar">
+  <div class="stat"><span class="stat-label">On-chain:</span> <span class="stat-value btc" id="wOnchain">--</span> <span class="stat-label">sats</span></div>
+  <div class="stat"><span class="stat-label">Lightning:</span> <span class="stat-value btc" id="wLightning">--</span> <span class="stat-label">sats</span></div>
+  <div class="stat"><span class="stat-label">Channels:</span> <span class="stat-value" id="wChannels">--</span></div>
+</div>
+
+<!-- ============================================================== -->
+<!-- Tab bar                                                         -->
+<!-- ============================================================== -->
+<div class="tab-bar" id="tabBar">
+  <button class="active" data-tab="wallet">Wallet</button>
+  <button data-tab="creator">Creator</button>
+  <button data-tab="library">Library</button>
+  <button data-tab="seeder">Seeder</button>
+  <button data-tab="advertiser">Advertiser</button>
+  <button data-tab="events">Events</button>
+  <button data-tab="settings">Settings</button>
+</div>
+
+<!-- ============================================================== -->
+<!-- TAB: Wallet                                                     -->
+<!-- ============================================================== -->
+<div class="tab-content active" id="tab-wallet">
+  <div class="card">
+    <h3>Node Identity</h3>
+    <p class="mono" id="walletNodeId">--</p>
+  </div>
+  <div class="card">
+    <h3>On-chain Wallet</h3>
+    <div style="display:flex;gap:16px;margin-bottom:12px;">
+      <div><span class="stat-label">Total: </span><span class="stat-value btc" id="walletOnchain">--</span> sats</div>
+      <div><span class="stat-label">Spendable: </span><span class="stat-value" id="walletSpendable">--</span> sats</div>
+    </div>
+    <p style="font-size:12px;color:#8b949e;">Funding address:</p>
+    <p class="mono" id="walletAddress" style="margin-top:4px;">--</p>
+  </div>
+  <div class="card">
+    <h3>Lightning Channels</h3>
+    <table id="channelTable">
+      <tr><th>Peer</th><th>Capacity</th><th>Outbound</th><th>Inbound</th><th>Status</th></tr>
+    </table>
+    <p class="empty" id="noChannels">No channels yet</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- TAB: Creator                                                    -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-creator">
+  <div class="card">
+    <h3>Publish Content</h3>
+    <p style="font-size:12px;color:#8b949e;margin-bottom:12px;">
+      Use the CLI to publish content: <code style="color:#79c0ff;">conduit-setup register --file path --price 50</code>
+    </p>
+  </div>
+  <div class="card">
+    <h3>My Catalog</h3>
+    <table id="creatorCatalogTable">
+      <tr><th>File</th><th>Price</th><th>Size</th><th>Hash</th></tr>
+    </table>
+    <p class="empty" id="noCreatorCatalog">No content published yet</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- TAB: Library (Buyer)                                            -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-library">
+  <div class="card">
+    <h3>Browse Catalog</h3>
+    <div id="libraryCatalog">
+      <p class="empty" id="noLibraryCatalog">Enter a Registry URL in Settings to browse content</p>
+    </div>
+  </div>
+
+  <div class="card" id="buyCard" style="display:none;">
+    <h3 id="buyTitle">--</h3>
+    <p id="buyMeta" style="font-size:12px;color:#8b949e;margin-bottom:8px;">--</p>
+    <p class="mono" id="buyHash" style="margin-bottom:12px;">--</p>
+
+    <div class="mode-row">
+      <label><input type="radio" name="buyMode" value="direct" checked> Direct</label>
+      <label><input type="radio" name="buyMode" value="seeder"> Seeder</label>
+      <label><input type="radio" name="buyMode" value="chunked"> Chunked</label>
+      <label><input type="radio" name="buyMode" value="ad"> Free (ad)</label>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn btn-primary" id="buyBtn" disabled>Buy</button>
+    </div>
+
+    <!-- Progress steps -->
+    <div id="buyProgress" style="display:none;margin-top:16px;"></div>
+
+    <!-- Result -->
+    <div id="buyResult" style="display:none;margin-top:12px;padding:12px;border-radius:8px;font-size:13px;"></div>
+
+    <!-- Preview -->
+    <div class="preview-container" id="buyPreview" style="display:none;"></div>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- TAB: Seeder                                                     -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-seeder">
+  <div class="card">
+    <h3>Seed Content</h3>
+    <p style="font-size:12px;color:#8b949e;margin-bottom:12px;">
+      Use the CLI to start seeding: <code style="color:#79c0ff;">conduit-setup seed --file path</code>
+    </p>
+  </div>
+  <div class="card">
+    <h3>Active Seeds</h3>
+    <table id="seederTable">
+      <tr><th>File</th><th>Chunks</th><th>Encrypted Hash</th></tr>
+    </table>
+    <p class="empty" id="noSeeds">No content being seeded yet</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- TAB: Advertiser                                                 -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-advertiser">
+  <div class="card">
+    <h3>Advertiser Role</h3>
+    <p style="font-size:12px;color:#8b949e;margin-bottom:8px;">
+      Run third-party ad campaigns. Advertisers are external parties (brands, businesses)
+      who pay to show their ads to buyers in exchange for subsidizing content purchases.
+    </p>
+    <p style="font-size:12px;color:#8b949e;">
+      Enable by starting the node with <code style="color:#79c0ff;">--ads-dir /path/to/ads</code>
+    </p>
+    <div id="advStatus" style="margin-top:12px;"></div>
+  </div>
+  <div class="card">
+    <h3>My Campaigns</h3>
+    <table id="advCampaignTable">
+      <tr><th>Name</th><th>Subsidy/View</th><th>Budget</th><th>Duration</th><th>Status</th></tr>
+    </table>
+    <p class="empty" id="noCampaigns">No campaigns yet</p>
+  </div>
+  <div class="card">
+    <h3>Advertiser Info</h3>
+    <p style="font-size:12px;color:#8b949e;">Ed25519 Pubkey:</p>
+    <p class="mono" id="advPubkey">--</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- TAB: Events                                                     -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-events">
+  <div class="event-filter" id="eventFilter">
+    <button class="active" data-filter="all">All</button>
+    <button data-filter="creator">Creator</button>
+    <button data-filter="buyer">Buyer</button>
+    <button data-filter="seeder">Seeder</button>
+    <button data-filter="advertiser">Advertiser</button>
+  </div>
+  <div id="eventList" style="max-height:600px;overflow-y:auto;"></div>
+  <p class="empty" id="noEvents">Waiting for events...</p>
+</div>
+
+<!-- ============================================================== -->
+<!-- TAB: Settings                                                   -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-settings">
+  <div class="settings">
+    <h3>Node Connection</h3>
+    <div class="row"><label>Node URL</label><input id="settNodeUrl" placeholder="http://localhost:3000"></div>
+    <div class="row"><label>Registry</label><input id="settRegistryUrl" placeholder="http://registry-ip:3003"></div>
+    <div class="status" id="settStatus">Not connected</div>
+    <button class="btn btn-primary" style="margin-top:10px;" onclick="connectNode()">Connect</button>
+  </div>
+</div>
+
+<!-- ============================================================== -->
+<!-- Ad overlay                                                      -->
+<!-- ============================================================== -->
+<div id="adOverlay">
+  <video id="adVideo" playsinline></video>
+  <div id="adTimer"></div>
+  <div id="adProgressBar"><div class="fill" id="adProgressFill"></div></div>
+</div>
+
+<!-- ============================================================== -->
+<!-- JavaScript                                                      -->
+<!-- ============================================================== -->
+<script>
+// ================================================================
+// State
+// ================================================================
+let nodeUrl = localStorage.getItem('conduit_nodeUrl') || '';
+let registryUrl = localStorage.getItem('conduit_registryUrl') || '';
+let nodeInfo = null;
+let catalog = [];
+let selectedItem = null;
+let eventSource = null;
+let events = [];
+let eventFilter = 'all';
+let lastOutputFile = '';
+
+// Populate settings from storage
+document.getElementById('settNodeUrl').value = nodeUrl;
+document.getElementById('settRegistryUrl').value = registryUrl;
+
+// ================================================================
+// Tabs
+// ================================================================
+document.querySelectorAll('.tab-bar button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-bar button').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ================================================================
+// Connect to node
+// ================================================================
+async function connectNode() {
+  nodeUrl = document.getElementById('settNodeUrl').value.trim().replace(/\/+$/, '');
+  registryUrl = document.getElementById('settRegistryUrl').value.trim().replace(/\/+$/, '');
+  localStorage.setItem('conduit_nodeUrl', nodeUrl);
+  localStorage.setItem('conduit_registryUrl', registryUrl);
+
+  if (!nodeUrl) {
+    document.getElementById('settStatus').textContent = 'Enter a Node URL';
+    return;
+  }
+
+  document.getElementById('settStatus').textContent = 'Connecting...';
+  try {
+    const r = await fetch(nodeUrl + '/api/info');
+    nodeInfo = await r.json();
+    document.getElementById('settStatus').textContent = 'Connected';
+    document.getElementById('settStatus').className = 'status ok';
+    updateWallet();
+    connectSSE();
+    loadCatalog();
+    loadCreatorCatalog();
+    loadAdvertiserInfo();
+    loadSeederInfo();
+  } catch (e) {
+    document.getElementById('settStatus').textContent = 'Failed: ' + e.message;
+    document.getElementById('settStatus').className = 'status';
+  }
+}
+
+// ================================================================
+// Wallet
+// ================================================================
+async function updateWallet() {
+  if (!nodeInfo) return;
+  document.getElementById('nodeId').textContent = nodeInfo.node_id.slice(0, 12) + '...';
+  document.getElementById('walletNodeId').textContent = nodeInfo.node_id;
+  document.getElementById('wOnchain').textContent = (nodeInfo.onchain_balance_sats || 0).toLocaleString();
+  document.getElementById('wLightning').textContent = (nodeInfo.lightning_balance_sats || 0).toLocaleString();
+  document.getElementById('walletOnchain').textContent = (nodeInfo.onchain_balance_sats || 0).toLocaleString();
+  document.getElementById('walletSpendable').textContent = (nodeInfo.spendable_onchain_sats || 0).toLocaleString();
+
+  const channels = nodeInfo.channels || [];
+  document.getElementById('wChannels').textContent = channels.length + ' (' + channels.filter(c => c.usable).length + ' usable)';
+
+  const table = document.getElementById('channelTable');
+  // Remove old rows (keep header)
+  while (table.rows.length > 1) table.deleteRow(1);
+  document.getElementById('noChannels').style.display = channels.length ? 'none' : 'block';
+  channels.forEach(ch => {
+    const row = table.insertRow();
+    row.innerHTML = `
+      <td class="mono">${(ch.counterparty_node_id || '--').slice(0, 16)}...</td>
+      <td class="price">${(ch.channel_value_sats || ch.value_sats || 0).toLocaleString()} sats</td>
+      <td>${Math.round((ch.outbound_capacity_msat || ch.outbound_msat || 0) / 1000).toLocaleString()} sats</td>
+      <td>${Math.round((ch.inbound_capacity_msat || ch.inbound_msat || 0) / 1000).toLocaleString()} sats</td>
+      <td><span class="badge ${ch.usable ? 'badge-green' : 'badge-yellow'}">${ch.usable ? 'Usable' : ch.is_channel_ready || ch.ready ? 'Ready' : 'Pending'}</span></td>
+    `;
+  });
+
+  // Fetch address
+  try {
+    const r = await fetch(nodeUrl + '/api/info');
+    // address might need a separate call; for now just show node_id area
+  } catch (e) {}
+}
+
+// ================================================================
+// SSE events
+// ================================================================
+function connectSSE() {
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource(nodeUrl + '/api/events');
+  eventSource.onmessage = (msg) => {
+    try {
+      const ev = JSON.parse(msg.data);
+      events.unshift(ev);
+      if (events.length > 500) events.pop();
+      renderEvent(ev);
+      handleBuyerEvent(ev);
+    } catch (e) {}
+  };
+  eventSource.onerror = () => {
+    document.getElementById('nodeId').textContent = 'SSE disconnected';
+  };
+}
+
+function renderEvent(ev) {
+  if (eventFilter !== 'all' && ev.role !== eventFilter) return;
+  document.getElementById('noEvents').style.display = 'none';
+  const list = document.getElementById('eventList');
+  const div = document.createElement('div');
+  div.className = 'event-item';
+  const ts = ev.timestamp ? ev.timestamp.split('T').pop().split('.')[0] || ev.timestamp : '';
+  div.innerHTML = `
+    <span class="time">${ts}</span>
+    <span class="role-tag ${ev.role || ''}">${ev.role || '?'}</span>
+    <span class="type">${ev.event_type || ''}</span>
+    <span class="payload">${JSON.stringify(ev.data || {}).slice(0, 120)}</span>
+  `;
+  list.prepend(div);
+}
+
+// Event filter buttons
+document.querySelectorAll('#eventFilter button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('#eventFilter button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    eventFilter = btn.dataset.filter;
+    // Re-render
+    document.getElementById('eventList').innerHTML = '';
+    document.getElementById('noEvents').style.display = events.length ? 'none' : 'block';
+    events.forEach(ev => renderEvent(ev));
+  });
+});
+
+// ================================================================
+// Creator catalog
+// ================================================================
+async function loadCreatorCatalog() {
+  if (!nodeUrl) return;
+  try {
+    const r = await fetch(nodeUrl + '/api/catalog');
+    const data = await r.json();
+    const items = data.catalog || data || [];
+    const table = document.getElementById('creatorCatalogTable');
+    while (table.rows.length > 1) table.deleteRow(1);
+    document.getElementById('noCreatorCatalog').style.display = items.length ? 'none' : 'block';
+    items.forEach(item => {
+      const row = table.insertRow();
+      row.innerHTML = `
+        <td>${item.file_name || '--'}</td>
+        <td class="price">${item.price_sats || 0} sats</td>
+        <td>${(item.size_bytes || 0).toLocaleString()} bytes</td>
+        <td class="mono">${(item.content_hash || '').slice(0, 16)}...</td>
+      `;
+    });
+  } catch (e) {}
+}
+
+// ================================================================
+// Library (buyer catalog from registry)
+// ================================================================
+async function loadCatalog() {
+  if (!registryUrl) return;
+  try {
+    const r = await fetch(registryUrl + '/api/listings');
+    const data = await r.json();
+    catalog = data.listings || data || [];
+    renderCatalog();
+  } catch (e) {
+    document.getElementById('noLibraryCatalog').textContent = 'Failed to load catalog: ' + e.message;
+  }
+}
+
+function renderCatalog() {
+  const container = document.getElementById('libraryCatalog');
+  container.innerHTML = '';
+  if (!catalog.length) {
+    container.innerHTML = '<p class="empty">No content available</p>';
+    return;
+  }
+  catalog.forEach(item => {
+    const div = document.createElement('div');
+    div.className = 'catalog-item' + (selectedItem && selectedItem.content_hash === item.content_hash ? ' selected' : '');
+    const ext = (item.file_name || '').split('.').pop().toUpperCase();
+    div.innerHTML = `
+      <div>
+        <div class="name">${item.file_name || 'Unknown'}</div>
+        <div class="meta">${ext} &middot; ${(item.size_bytes || 0).toLocaleString()} bytes</div>
+      </div>
+      <div class="price">${item.price_sats || 0} sats</div>
+    `;
+    div.addEventListener('click', () => selectItem(item));
+    container.appendChild(div);
+  });
+}
+
+function selectItem(item) {
+  selectedItem = item;
+  renderCatalog();
+  document.getElementById('buyCard').style.display = 'block';
+  document.getElementById('buyTitle').textContent = item.file_name || 'Unknown';
+  document.getElementById('buyMeta').textContent = `${(item.size_bytes || 0).toLocaleString()} bytes | ${item.price_sats || 0} sats`;
+  document.getElementById('buyHash').textContent = item.content_hash || '';
+  document.getElementById('buyBtn').disabled = false;
+  document.getElementById('buyProgress').style.display = 'none';
+  document.getElementById('buyProgress').innerHTML = '';
+  document.getElementById('buyResult').style.display = 'none';
+  document.getElementById('buyPreview').style.display = 'none';
+}
+
+// ================================================================
+// Buy flow
+// ================================================================
+document.getElementById('buyBtn').addEventListener('click', doBuy);
+
+function getMode() {
+  return document.querySelector('input[name="buyMode"]:checked').value;
+}
+
+async function doBuy() {
+  if (!selectedItem) return;
+  const mode = getMode();
+  document.getElementById('buyBtn').disabled = true;
+  document.getElementById('buyResult').style.display = 'none';
+  document.getElementById('buyPreview').style.display = 'none';
+
+  if (mode === 'direct') await doBuyDirect();
+  else if (mode === 'ad') await doBuyAdSubsidized();
+  else await doBuyChunked(mode);
+}
+
+// Progress step helpers
+function buildSteps(steps) {
+  const container = document.getElementById('buyProgress');
+  container.innerHTML = '';
+  container.style.display = 'block';
+  steps.forEach((s, i) => {
+    const div = document.createElement('div');
+    div.className = 'step';
+    div.id = 'step-' + s.id;
+    div.innerHTML = `<span class="num">${i + 1}</span><span class="text">${s.text}</span><span class="detail"></span>`;
+    container.appendChild(div);
+  });
+}
+
+function setStep(id, state, detail) {
+  const el = document.getElementById('step-' + id);
+  if (!el) return;
+  el.className = 'step ' + state;
+  if (detail !== undefined) el.querySelector('.detail').textContent = detail;
+}
+
+function showResult(ok, msg) {
+  const el = document.getElementById('buyResult');
+  el.style.display = 'block';
+  el.style.background = ok ? '#1a2f1a' : '#2f1a1a';
+  el.style.color = ok ? '#3fb950' : '#f85149';
+  el.textContent = msg;
+}
+
+// --- Direct buy ---
+const STEPS_DIRECT = [
+  { id: 'fetch', text: 'Fetching encrypted content' },
+  { id: 'pay', text: 'Paying creator invoice' },
+  { id: 'htlc', text: 'HTLC settling' },
+  { id: 'decrypt', text: 'Decrypting with K' },
+  { id: 'verify', text: 'Verifying plaintext H(F)' },
+];
+
+async function doBuyDirect() {
+  buildSteps(STEPS_DIRECT);
+  setStep('fetch', 'active', 'Starting...');
+  try {
+    const r = await fetch(nodeUrl + '/api/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoice: selectedItem.bolt11 || '',
+        enc_url: selectedItem.creator_url ? selectedItem.creator_url + '/api/enc/' + (selectedItem.enc_filename || '') : '',
+        hash: selectedItem.content_hash,
+        output: '/tmp/decrypted-' + Date.now() + '-' + (selectedItem.file_name || 'content'),
+      }),
+    });
+    const res = await r.json();
+    lastOutputFile = 'decrypted-' + Date.now() + '-' + (selectedItem.file_name || 'content');
+    console.log('Direct buy started:', res);
+  } catch (e) {
+    setStep('fetch', 'fail', e.message);
+    showResult(false, 'Failed: ' + e.message);
+  }
+}
+
+// --- Chunked / seeder buy ---
+const STEPS_CHUNKED = [
+  { id: 'cpay', text: 'Paying creator (content key K)' },
+  { id: 'chtlc', text: 'Content HTLC settling' },
+  { id: 'cmeta', text: 'Fetching chunk metadata' },
+  { id: 'cbit', text: 'Querying seeder bitfields' },
+  { id: 'tpay', text: 'Paying seeders (transport)' },
+  { id: 'thtlc', text: 'Transport HTLC settling' },
+  { id: 'down', text: 'Downloading & verifying chunks' },
+  { id: 'assem', text: 'Reassembling content' },
+  { id: 'decrypt', text: 'Decrypting with K' },
+  { id: 'verify', text: 'Verifying plaintext H(F)' },
+];
+
+async function doBuyChunked(mode) {
+  buildSteps(mode === 'chunked' ? STEPS_CHUNKED : STEPS_DIRECT);
+  setStep(mode === 'chunked' ? 'cpay' : 'fetch', 'active', 'Starting...');
+  // Use the buyer node's /api/buy with appropriate mode
+  const body = {
+    mode: mode,
+    content_invoice: selectedItem.bolt11 || '',
+    encrypted_hash: selectedItem.encrypted_hash || '',
+    hash: selectedItem.content_hash,
+    output: '/tmp/decrypted-' + Date.now() + '-' + (selectedItem.file_name || 'content'),
+    seeder_urls: [],  // TODO: populate from registry discover
+  };
+  try {
+    const r = await fetch(nodeUrl + '/api/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const res = await r.json();
+    console.log('Chunked buy started:', res);
+  } catch (e) {
+    setStep(mode === 'chunked' ? 'cpay' : 'fetch', 'fail', e.message);
+    showResult(false, 'Failed: ' + e.message);
+  }
+}
+
+// --- Ad-subsidized buy (two-payment flow) ---
+const STEPS_AD = [
+  { id: 'adinv', text: 'Requesting ad-subsidized invoices' },
+  { id: 'adwatch', text: 'Watching sponsored ad' },
+  { id: 'adattest', text: 'Obtaining attestation token' },
+  { id: 'keypay', text: 'Buyer paying 1 sat (learn K)' },
+  { id: 'keyhtlc', text: 'Key HTLC settling' },
+  { id: 'adpay', text: 'Advertiser paying content price' },
+  { id: 'adhtlc', text: 'Subsidy HTLC settling' },
+  { id: 'fetch', text: 'Fetching encrypted content' },
+  { id: 'decrypt', text: 'Decrypting with K' },
+  { id: 'verify', text: 'Verifying plaintext H(F)' },
+];
+
+async function doBuyAdSubsidized() {
+  buildSteps(STEPS_AD);
+
+  // Need an advertiser URL -- for now look at creator URL or a configured one
+  // In a unified node, the advertiser might be a different node
+  const advertiserUrl = prompt('Enter advertiser node URL (e.g. http://ip:port):', nodeUrl);
+  if (!advertiserUrl) { showResult(false, 'Advertiser URL required'); return; }
+
+  setStep('adinv', 'active', 'Requesting invoices from creator...');
+
+  let adInvoice;
+  try {
+    const r = await fetch(nodeUrl + '/api/ad-invoice/' + selectedItem.content_hash, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ advertiser_url: advertiserUrl }),
+    });
+    adInvoice = await r.json();
+    if (adInvoice.error) { setStep('adinv', 'fail', adInvoice.error); showResult(false, adInvoice.error); return; }
+  } catch (e) { setStep('adinv', 'fail', e.message); showResult(false, e.message); return; }
+
+  setStep('adinv', 'done', 'Two invoices received (1 sat + ' + adInvoice.price_sats + ' sats)');
+
+  let buyerNodeId = '';
+  try {
+    const ir = await fetch(nodeUrl + '/api/info');
+    const id = await ir.json();
+    buyerNodeId = id.node_id || '';
+  } catch (e) {}
+
+  // Start ad session
+  setStep('adwatch', 'active', 'Starting ad session...');
+  let sessionData;
+  try {
+    const r = await fetch(advertiserUrl + '/api/campaigns/' + adInvoice.campaign_id + '/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ buyer_pubkey: buyerNodeId }),
+    });
+    sessionData = await r.json();
+    if (sessionData.error) { setStep('adwatch', 'fail', sessionData.error); showResult(false, sessionData.error); return; }
+  } catch (e) { setStep('adwatch', 'fail', e.message); showResult(false, e.message); return; }
+
+  // Display ad with countdown
+  const overlay = document.getElementById('adOverlay');
+  const video = document.getElementById('adVideo');
+  const timer = document.getElementById('adTimer');
+  const fill = document.getElementById('adProgressFill');
+  overlay.style.display = 'flex';
+  const dMs = sessionData.duration_ms || 15000;
+  const dSec = Math.ceil(dMs / 1000);
+  video.src = adInvoice.ad_creative_url;
+  video.play().catch(() => {});
+  let rem = dSec;
+  timer.textContent = rem + 's';
+  fill.style.width = '0%';
+
+  await new Promise(resolve => {
+    const iv = setInterval(() => {
+      rem--;
+      timer.textContent = rem > 0 ? rem + 's' : 'Done!';
+      fill.style.width = Math.min(100, ((dSec - rem) / dSec) * 100) + '%';
+      setStep('adwatch', 'active', rem > 0 ? rem + 's remaining' : 'Complete');
+      if (rem <= 0) { clearInterval(iv); resolve(); }
+    }, 1000);
+  });
+  video.pause();
+  overlay.style.display = 'none';
+  setStep('adwatch', 'done', 'Ad viewed (' + dSec + 's)');
+
+  // Get attestation token
+  setStep('adattest', 'active', 'Requesting token...');
+  let attestation;
+  try {
+    const r = await fetch(advertiserUrl + '/api/campaigns/' + adInvoice.campaign_id + '/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionData.session_id, buyer_pubkey: buyerNodeId }),
+    });
+    attestation = await r.json();
+    if (attestation.error) { setStep('adattest', 'fail', attestation.error); showResult(false, attestation.error); return; }
+  } catch (e) { setStep('adattest', 'fail', e.message); showResult(false, e.message); return; }
+  setStep('adattest', 'done', 'Token received');
+
+  // Payment 1: Buyer pays 1 sat to learn K
+  setStep('keypay', 'active', 'Paying 1 sat...');
+  const encFilename = adInvoice.enc_filename || '';
+  const encUrl = nodeUrl + '/api/enc/' + encFilename;
+  const baseName = (adInvoice.file_name || 'content').replace(/\.[^.]+$/, '');
+  const ext = (adInvoice.file_name || '').split('.').pop() || 'bin';
+  const outputFile = 'decrypted-' + Date.now() + '-' + baseName + '.' + ext;
+  lastOutputFile = outputFile;
+
+  try {
+    const r = await fetch(nodeUrl + '/api/buy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoice: adInvoice.buyer_invoice,
+        enc_url: encUrl,
+        hash: adInvoice.content_hash,
+        output: '/tmp/' + outputFile,
+      }),
+    });
+    const res = await r.json();
+    console.log('Ad buy Payment 1 (key) started:', res);
+  } catch (e) { setStep('keypay', 'fail', e.message); showResult(false, e.message); return; }
+
+  // Payment 2: Advertiser pays content price (K_ad, not K)
+  setStep('adpay', 'active', 'Advertiser paying ' + adInvoice.price_sats + ' sats...');
+  try {
+    const r = await fetch(advertiserUrl + '/api/campaigns/pay', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        bolt11_invoice: adInvoice.advertiser_invoice,
+        attestation_token: attestation.token,
+        attestation_payload: attestation.payload,
+      }),
+    });
+    const res = await r.json();
+    if (res.status !== 'payment_sent') {
+      setStep('adpay', 'fail', res.status);
+    } else {
+      setStep('adpay', 'done', 'Subsidy paid (K_ad, not K)');
+      setStep('adhtlc', 'active', 'Settling...');
+      setTimeout(() => setStep('adhtlc', 'done', 'Advertiser never learned K'), 5000);
+    }
+  } catch (e) { setStep('adpay', 'fail', e.message); }
+}
+
+// ================================================================
+// Handle SSE events for buy progress
+// ================================================================
+function handleBuyerEvent(ev) {
+  const mode = getMode();
+  switch (ev.event_type) {
+    case 'FETCHING_ENC':
+      setStep('fetch', 'active', 'Downloading...'); break;
+    case 'ENC_FETCHED':
+      setStep('fetch', 'done', (ev.data.bytes || 0) + ' bytes'); break;
+    case 'FETCH_FAILED':
+      setStep('fetch', 'fail', ev.data.error || 'Failed'); showResult(false, 'Download failed'); break;
+    case 'BUY_ERROR':
+      showResult(false, ev.data.message || 'Error'); break;
+
+    case 'PAYING_INVOICE':
+      if (mode === 'ad') setStep('keypay', 'active', '1 sat invoice sent');
+      else setStep('pay', 'active', 'Invoice sent');
+      break;
+    case 'PAYMENT_SENT':
+      if (mode === 'ad') { setStep('keypay', 'done', 'HTLC in flight'); setStep('keyhtlc', 'active'); }
+      else { setStep('pay', 'done', 'HTLC in flight'); setStep('htlc', 'active'); }
+      break;
+    case 'PAYMENT_CONFIRMED':
+      if (mode === 'ad') { setStep('keyhtlc', 'done', 'K received'); setStep('fetch', 'active'); }
+      else { setStep('htlc', 'done', 'Preimage received'); setStep('decrypt', 'active'); }
+      break;
+    case 'PAYMENT_FAILED':
+      if (mode === 'ad') setStep('keypay', 'fail', ev.data.reason || 'Failed');
+      else setStep('pay', 'fail', ev.data.reason || 'Failed');
+      showResult(false, 'Payment failed');
+      break;
+
+    case 'DECRYPTING': setStep('decrypt', 'active', 'Decrypting...'); break;
+    case 'DECRYPTED': setStep('decrypt', 'done', 'Decrypted'); break;
+    case 'VERIFYING': setStep('verify', 'active', 'Verifying...'); break;
+    case 'VERIFIED': setStep('verify', 'done', 'Verified'); break;
+    case 'VERIFICATION_FAILED': setStep('verify', 'fail', 'Mismatch!'); showResult(false, 'Verification failed'); break;
+
+    case 'FILE_SAVED':
+      showResult(true, 'Content purchased and verified!');
+      tryPreview(ev.data);
+      break;
+
+    // Chunked mode events
+    case 'TRANSPORT_PAYING': setStep('tpay', 'active', 'Paying seeders...'); break;
+    case 'TRANSPORT_PAID': setStep('tpay', 'done'); setStep('thtlc', 'active'); break;
+    case 'TRANSPORT_CONFIRMED': setStep('thtlc', 'done'); setStep('down', 'active'); break;
+    case 'CHUNKS_DOWNLOADING': setStep('down', 'active', ev.data.progress || ''); break;
+    case 'CHUNKS_DOWNLOADED': setStep('down', 'done'); setStep('assem', 'active'); break;
+    case 'ASSEMBLED': setStep('assem', 'done'); setStep('decrypt', 'active'); break;
+  }
+}
+
+function tryPreview(data) {
+  const container = document.getElementById('buyPreview');
+  const file = data.output || data.path || '';
+  if (!file || !nodeUrl) return;
+  const url = nodeUrl + '/api/decrypted/' + file.split('/').pop();
+  const ext = file.split('.').pop().toLowerCase();
+  container.style.display = 'block';
+  if (['mp3', 'ogg', 'wav', 'opus', 'flac', 'aac', 'm4a'].includes(ext)) {
+    container.innerHTML = `<audio controls src="${url}" style="width:100%;"></audio>`;
+  } else if (['mp4', 'webm', 'mov'].includes(ext)) {
+    container.innerHTML = `<video controls src="${url}" style="width:100%;"></video>`;
+  } else if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
+    container.innerHTML = `<img src="${url}" alt="Preview">`;
+  } else {
+    container.innerHTML = `<a href="${url}" target="_blank" class="btn btn-secondary">Download ${file.split('/').pop()}</a>`;
+  }
+}
+
+// ================================================================
+// Seeder info
+// ================================================================
+async function loadSeederInfo() {
+  if (!nodeUrl) return;
+  try {
+    const r = await fetch(nodeUrl + '/api/catalog');
+    const data = await r.json();
+    const items = (data.catalog || data || []).filter(i => i.chunks_held && i.chunks_held.length > 0 || i.seeding);
+    const table = document.getElementById('seederTable');
+    while (table.rows.length > 1) table.deleteRow(1);
+    document.getElementById('noSeeds').style.display = items.length ? 'none' : 'block';
+    items.forEach(item => {
+      const row = table.insertRow();
+      row.innerHTML = `
+        <td>${item.file_name || '--'}</td>
+        <td>${(item.chunks_held || []).length || item.chunk_count || '--'}</td>
+        <td class="mono">${(item.encrypted_hash || '').slice(0, 16)}...</td>
+      `;
+    });
+  } catch (e) {}
+}
+
+// ================================================================
+// Advertiser info
+// ================================================================
+async function loadAdvertiserInfo() {
+  if (!nodeUrl) return;
+  try {
+    const r = await fetch(nodeUrl + '/api/advertiser/info');
+    const info = await r.json();
+    const status = document.getElementById('advStatus');
+    if (info.enabled) {
+      status.innerHTML = '<span class="badge badge-green">Enabled</span>';
+      document.getElementById('advPubkey').textContent = info.advertiser_pubkey || '--';
+
+      // Load campaigns
+      const cr = await fetch(nodeUrl + '/api/campaigns');
+      const cdata = await cr.json();
+      const campaigns = cdata.campaigns || [];
+      const table = document.getElementById('advCampaignTable');
+      while (table.rows.length > 1) table.deleteRow(1);
+      document.getElementById('noCampaigns').style.display = campaigns.length ? 'none' : 'block';
+      campaigns.forEach(c => {
+        const pct = c.budget_total_sats > 0 ? Math.round(c.budget_spent_sats / c.budget_total_sats * 100) : 0;
+        const row = table.insertRow();
+        row.innerHTML = `
+          <td>${c.name || '--'}</td>
+          <td class="price">${c.subsidy_sats || 0} sats</td>
+          <td>${(c.budget_spent_sats || 0).toLocaleString()} / ${(c.budget_total_sats || 0).toLocaleString()} sats (${pct}%)</td>
+          <td>${c.duration_ms || 0} ms</td>
+          <td><span class="badge ${c.active ? 'badge-green' : 'badge-red'}">${c.active ? 'Active' : 'Paused'}</span></td>
+        `;
+      });
+    } else {
+      status.innerHTML = '<span class="badge badge-yellow">Not enabled</span> <span style="font-size:12px;color:#8b949e;margin-left:8px;">Start node with --ads-dir to enable</span>';
+    }
+  } catch (e) {
+    document.getElementById('advStatus').innerHTML = '<span class="badge badge-red">Error</span> <span style="font-size:12px;color:#8b949e;">' + e.message + '</span>';
+  }
+}
+
+// ================================================================
+// Auto-connect on load
+// ================================================================
+if (nodeUrl) {
+  connectNode();
+}
+</script>
+</body>
+</html>
