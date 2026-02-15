@@ -11,53 +11,59 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Deploy unified dashboard + buyer-ui to all nodes
-      - name: Deploy UI to creator node
+      # Deploy dashboard.html to the path each node's --dashboard flag expects.
+      # Service files reference:
+      #   Creator/Buyer:    /root/conduit/dashboard.html
+      #   Seeder 1 (AWS):   /home/ubuntu/conduit/dashboard.html
+      #   Seeder 2:         /root/conduit/dashboard.html
+      #   Advertiser:       /root/conduit/dashboard.html
+
+      - name: Deploy to Creator
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.CREATOR_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "dashboard.html,buyer-ui.html"
-          target: /root/conduit-ui/
+          target: /root/conduit/
           overwrite: true
 
-      - name: Deploy UI to buyer node
+      - name: Deploy to Buyer
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.BUYER_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "dashboard.html,buyer-ui.html"
-          target: /root/conduit-ui/
+          target: /root/conduit/
           overwrite: true
 
-      - name: Deploy UI to registry node
+      - name: Deploy to Seeder 2 / Registry droplet
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.REGISTRY_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "dashboard.html,buyer-ui.html"
-          target: /root/conduit-ui/
+          target: /root/conduit/
           overwrite: true
 
-      - name: Deploy UI to seeder node (AWS)
+      - name: Deploy to Seeder 1 (AWS)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SEEDER_HOST }}
           username: ubuntu
           key: ${{ secrets.SEEDER_SSH_KEY }}
           source: "dashboard.html,buyer-ui.html"
-          target: /home/ubuntu/conduit-ui/
+          target: /home/ubuntu/conduit/
           overwrite: true
 
-      - name: Deploy UI to advertiser node
+      - name: Deploy to Advertiser
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.ADVERTISER_HOST }}
           username: root
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "dashboard.html,buyer-ui.html"
-          target: /root/conduit-ui/
+          target: /root/conduit/
           overwrite: true
