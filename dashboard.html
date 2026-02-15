@@ -917,8 +917,7 @@ const STEPS_CHUNKED = [
 ];
 
 async function doBuyChunked(mode) {
-  const steps = mode === 'chunked' ? STEPS_CHUNKED : STEPS_DIRECT;
-  buildSteps(steps);
+  buildSteps(STEPS_CHUNKED);
 
   const creatorUrl = ensureHttp(selectedItem.creator_address);
   if (!creatorUrl) {
@@ -948,7 +947,7 @@ async function doBuyChunked(mode) {
     return;
   }
 
-  setStep(mode === 'chunked' ? 'cpay' : 'pay', 'active', 'Starting...');
+  setStep('cpay', 'active', 'Starting...');
 
   // Discover seeders from registry
   let seederUrls = [];
@@ -956,8 +955,12 @@ async function doBuyChunked(mode) {
     try {
       const dr = await fetch(registryUrl + '/api/discover/' + selectedItem.content_hash);
       const dd = await dr.json();
-      seederUrls = (dd.seeders || dd.items || []).map(s => s.seeder_address).filter(Boolean);
+      seederUrls = (dd.seeders || dd.items || []).map(s => ensureHttp(s.seeder_address)).filter(Boolean);
     } catch (e) {}
+    if (seederUrls.length === 0) {
+      showResult(false, 'No seeders found for this content. Try Direct mode instead.');
+      return;
+    }
   }
 
   const body = {
@@ -977,7 +980,7 @@ async function doBuyChunked(mode) {
     const res = await r.json();
     console.log('Buy started:', res);
   } catch (e) {
-    setStep(mode === 'chunked' ? 'cpay' : 'pay', 'fail', e.message);
+    setStep('cpay', 'fail', e.message);
     showResult(false, 'Failed: ' + e.message);
   }
 }
