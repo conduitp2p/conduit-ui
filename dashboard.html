@@ -1145,6 +1145,10 @@ function handleBuyerEvent(ev) {
       setStep('fetch', 'fail', ev.data.error || 'Failed'); showResult(false, 'Download failed'); break;
     case 'BUY_ERROR':
       showResult(false, ev.data.message || 'Error'); break;
+    case 'COUNTDOWN':
+      if (mode === 'ad') setStep('keypay', 'active', ev.data.message || '');
+      else setStep('pay', 'active', ev.data.message || '');
+      break;
 
     case 'PAYING_INVOICE':
       if (mode === 'ad') setStep('keypay', 'active', '1 sat invoice sent');
@@ -1172,10 +1176,29 @@ function handleBuyerEvent(ev) {
     case 'AD_CLAIMED_ADVERTISER': setStep('adhtlc', 'done', 'K_ad claimed (meaningless)'); break;
 
     case 'DECRYPTING': setStep('decrypt', 'active', 'Decrypting...'); break;
-    case 'DECRYPTED': setStep('decrypt', 'done', 'Decrypted'); break;
+    case 'DECRYPTED':
+    case 'CONTENT_DECRYPTED':
+      setStep('decrypt', 'done', ev.data.chunks ? ev.data.chunks + ' chunks' : 'Decrypted');
+      setStep('verify', 'active', 'Verifying...');
+      break;
     case 'VERIFYING': setStep('verify', 'active', 'Verifying...'); break;
-    case 'VERIFIED': setStep('verify', 'done', 'Verified'); break;
+    case 'VERIFIED':
+    case 'HASH_VERIFIED':
+      if (ev.data.matches === false) {
+        setStep('verify', 'fail', 'Mismatch!');
+        showResult(false, 'Verification failed — content hash mismatch');
+      } else {
+        setStep('verify', 'done', 'Verified');
+      }
+      break;
+    case 'HASH_MISMATCH':
     case 'VERIFICATION_FAILED': setStep('verify', 'fail', 'Mismatch!'); showResult(false, 'Verification failed'); break;
+
+    // Chunked mode decrypt/verify
+    case 'CHUNKS_DECRYPTED':
+      setStep('decrypt', 'done', ev.data.chunk_count ? ev.data.chunk_count + ' chunks' : 'Decrypted');
+      setStep('verify', 'active', 'Verifying...');
+      break;
 
     case 'FILE_SAVED':
       showResult(true, 'Content purchased and verified!');
@@ -1183,10 +1206,26 @@ function handleBuyerEvent(ev) {
       recordPurchase(ev.data);
       break;
 
-    // Chunked mode events
+    // Chunked mode events — creator payment
+    case 'CONTENT_PAYING': setStep('cpay', 'active', 'Sending payment...'); break;
+    case 'CONTENT_PAYMENT_SENT': setStep('cpay', 'done', 'HTLC in flight'); setStep('chtlc', 'active'); break;
+    case 'CONTENT_PAID': setStep('chtlc', 'done', 'K received'); setStep('cmeta', 'active', 'Fetching...'); break;
+    case 'CONTENT_PAYMENT_FAILED': setStep('cpay', 'fail', ev.data.reason || 'Failed'); showResult(false, 'Content payment failed'); break;
+
+    // Chunked mode events — chunk metadata
+    case 'CHUNK_META_RECEIVED': setStep('cmeta', 'done', ev.data.chunk_count ? ev.data.chunk_count + ' chunks' : ''); setStep('cbit', 'active'); break;
+    case 'CHUNK_PLAN': setStep('cbit', 'done', ev.data.total_chunks ? ev.data.total_chunks + ' chunks planned' : ''); break;
+
+    // Chunked mode events — transport payment + download
     case 'TRANSPORT_PAYING': setStep('tpay', 'active', 'Paying seeders...'); break;
-    case 'TRANSPORT_PAID': setStep('tpay', 'done'); setStep('thtlc', 'active'); break;
-    case 'TRANSPORT_CONFIRMED': setStep('thtlc', 'done'); setStep('down', 'active'); break;
+    case 'TRANSPORT_PAYMENT_SENT': setStep('tpay', 'done', 'HTLC in flight'); setStep('thtlc', 'active'); break;
+    case 'TRANSPORT_PAID': setStep('thtlc', 'done', 'Transport key received'); setStep('down', 'active'); break;
+    case 'TRANSPORT_PAYMENT_FAILED': setStep('tpay', 'fail', 'Failed'); showResult(false, 'Transport payment failed'); break;
+    case 'CHUNK_DOWNLOADED': setStep('down', 'active', ev.data.message || ''); break;
+    case 'CHUNK_VERIFIED': setStep('down', 'active', 'Chunk ' + (ev.data.index ?? '') + ' verified'); break;
+    case 'CHUNK_DOWNLOAD_FAILED': setStep('down', 'fail', ev.data.error || 'Failed'); break;
+
+    // Chunked mode events — reassembly
     case 'CHUNKS_DOWNLOADING': setStep('down', 'active', ev.data.progress || ''); break;
     case 'CHUNKS_DOWNLOADED': setStep('down', 'done'); setStep('assem', 'active'); break;
     case 'ASSEMBLED': setStep('assem', 'done'); setStep('decrypt', 'active'); break;
