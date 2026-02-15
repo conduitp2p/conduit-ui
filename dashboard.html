@@ -225,6 +225,7 @@ tr:hover td { background: #1c2128; }
   <button class="active" data-tab="wallet">Wallet</button>
   <button data-tab="creator">Creator</button>
   <button data-tab="library">Library</button>
+  <button data-tab="collection">Collection</button>
   <button data-tab="seeder">Seeder</button>
   <button data-tab="advertiser">Advertiser</button>
   <button data-tab="events">Events</button>
@@ -245,8 +246,9 @@ tr:hover td { background: #1c2128; }
       <div><span class="stat-label">Total: </span><span class="stat-value btc" id="walletOnchain">--</span> sats</div>
       <div><span class="stat-label">Spendable: </span><span class="stat-value" id="walletSpendable">--</span> sats</div>
     </div>
-    <p style="font-size:12px;color:#8b949e;">Funding address:</p>
-    <p class="mono" id="walletAddress" style="margin-top:4px;">--</p>
+    <p style="font-size:12px;color:#8b949e;">Funding address (click to copy):</p>
+    <p class="mono" id="walletAddress" style="margin-top:4px;cursor:pointer;" onclick="copyAddress()" title="Click to copy">--</p>
+    <button class="btn btn-secondary" style="margin-top:8px;font-size:11px;" onclick="fetchAddress()">New Address</button>
   </div>
   <div class="card">
     <h3>Lightning Channels</h3>
@@ -264,11 +266,23 @@ tr:hover td { background: #1c2128; }
   <div class="card">
     <h3>Publish Content</h3>
     <p style="font-size:12px;color:#8b949e;margin-bottom:12px;">
-      Use the CLI to publish content: <code style="color:#79c0ff;">conduit-setup register --file path --price 50</code>
+      Register a file for sale. The file must be accessible on the node's filesystem.
     </p>
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px;">File path (on node)</label>
+        <input id="regFilePath" placeholder="/path/to/content.mp4" style="width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px;">
+      </div>
+      <div style="width:120px;">
+        <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px;">Price (sats)</label>
+        <input id="regPrice" type="number" min="1" value="50" style="width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px;">
+      </div>
+      <button class="btn btn-primary" onclick="registerContent()">Publish</button>
+    </div>
+    <div id="regStatus" style="margin-top:8px;font-size:12px;color:#8b949e;"></div>
   </div>
   <div class="card">
-    <h3>My Catalog</h3>
+    <h3>My Catalog <button class="btn btn-secondary" style="float:right;font-size:11px;padding:4px 10px;" onclick="loadCreatorCatalog()">Refresh</button></h3>
     <table id="creatorCatalogTable">
       <tr><th>File</th><th>Price</th><th>Size</th><th>Hash</th></tr>
     </table>
@@ -281,7 +295,7 @@ tr:hover td { background: #1c2128; }
 <!-- ============================================================== -->
 <div class="tab-content" id="tab-library">
   <div class="card">
-    <h3>Browse Catalog</h3>
+    <h3>Browse Catalog <button class="btn btn-secondary" style="float:right;font-size:11px;padding:4px 10px;" onclick="loadCatalog()">Refresh</button></h3>
     <div id="libraryCatalog">
       <p class="empty" id="noLibraryCatalog">Enter a Registry URL in Settings to browse content</p>
     </div>
@@ -291,6 +305,7 @@ tr:hover td { background: #1c2128; }
     <h3 id="buyTitle">--</h3>
     <p id="buyMeta" style="font-size:12px;color:#8b949e;margin-bottom:8px;">--</p>
     <p class="mono" id="buyHash" style="margin-bottom:12px;">--</p>
+    <p style="font-size:11px;color:#484f58;margin-bottom:8px;" id="buyCreatorAddr">--</p>
 
     <div class="mode-row">
       <label><input type="radio" name="buyMode" value="direct" checked> Direct</label>
@@ -315,19 +330,47 @@ tr:hover td { background: #1c2128; }
 </div>
 
 <!-- ============================================================== -->
+<!-- TAB: Collection                                                  -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-collection">
+  <div class="card">
+    <h3>My Collection <button class="btn btn-secondary" style="float:right;font-size:11px;padding:4px 10px;" onclick="renderCollection()">Refresh</button></h3>
+    <p style="font-size:12px;color:#8b949e;margin-bottom:12px;">Content you have purchased. Stored in your browser.</p>
+    <div id="collectionList"></div>
+    <p class="empty" id="noCollection">No purchases yet. Buy content from the Library tab.</p>
+  </div>
+</div>
+
+<!-- ============================================================== -->
 <!-- TAB: Seeder                                                     -->
 <!-- ============================================================== -->
 <div class="tab-content" id="tab-seeder">
   <div class="card">
-    <h3>Seed Content</h3>
+    <h3>Register Seed</h3>
     <p style="font-size:12px;color:#8b949e;margin-bottom:12px;">
-      Use the CLI to start seeding: <code style="color:#79c0ff;">conduit-setup seed --file path</code>
+      Register encrypted content to seed. Provide the path to the encrypted file, its hash, and the transport price you want to charge.
     </p>
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+      <div style="flex:1;min-width:200px;">
+        <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px;">Encrypted file path (on node)</label>
+        <input id="seedFilePath" placeholder="/path/to/encrypted.enc" style="width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px;">
+      </div>
+      <div style="flex:1;min-width:200px;">
+        <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px;">Encrypted hash H(E)</label>
+        <input id="seedEncHash" placeholder="abcdef1234..." style="width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px;">
+      </div>
+      <div style="width:120px;">
+        <label style="font-size:11px;color:#8b949e;display:block;margin-bottom:4px;">Transport price (sats)</label>
+        <input id="seedPrice" type="number" min="1" value="10" style="width:100%;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:8px 10px;border-radius:6px;font-family:inherit;font-size:13px;">
+      </div>
+      <button class="btn btn-primary" onclick="registerSeed()">Seed</button>
+    </div>
+    <div id="seedStatus" style="margin-top:8px;font-size:12px;color:#8b949e;"></div>
   </div>
   <div class="card">
-    <h3>Active Seeds</h3>
+    <h3>Active Seeds <button class="btn btn-secondary" style="float:right;font-size:11px;padding:4px 10px;" onclick="loadSeederInfo()">Refresh</button></h3>
     <table id="seederTable">
-      <tr><th>File</th><th>Chunks</th><th>Encrypted Hash</th></tr>
+      <tr><th>File</th><th>Chunks</th><th>Transport Price</th><th>Encrypted Hash</th></tr>
     </table>
     <p class="empty" id="noSeeds">No content being seeded yet</p>
   </div>
@@ -343,21 +386,33 @@ tr:hover td { background: #1c2128; }
       Run third-party ad campaigns. Advertisers are external parties (brands, businesses)
       who pay to show their ads to buyers in exchange for subsidizing content purchases.
     </p>
-    <p style="font-size:12px;color:#8b949e;">
-      Enable by starting the node with <code style="color:#79c0ff;">--ads-dir /path/to/ads</code>
-    </p>
     <div id="advStatus" style="margin-top:12px;"></div>
+    <div id="advEnableHint" style="display:none;margin-top:8px;">
+      <p style="font-size:12px;color:#8b949e;">
+        Enable by starting the node with <code style="color:#79c0ff;">--ads-dir /path/to/ads</code>
+      </p>
+      <p style="font-size:11px;color:#484f58;margin-top:4px;">
+        Place ad creatives (mp4, webm, png, jpg) in the directory. A default campaign is auto-created from the first file found.
+      </p>
+    </div>
   </div>
   <div class="card">
-    <h3>My Campaigns</h3>
+    <h3>My Campaigns <button class="btn btn-secondary" style="float:right;font-size:11px;padding:4px 10px;" onclick="loadAdvertiserInfo()">Refresh</button></h3>
     <table id="advCampaignTable">
-      <tr><th>Name</th><th>Subsidy/View</th><th>Budget</th><th>Duration</th><th>Status</th></tr>
+      <tr><th>Name</th><th>Subsidy/View</th><th>Budget Used</th><th>Budget Total</th><th>Duration</th><th>Status</th></tr>
     </table>
     <p class="empty" id="noCampaigns">No campaigns yet</p>
   </div>
+  <div class="card" id="advStatsCard" style="display:none;">
+    <h3>Payment Stats</h3>
+    <div style="display:flex;gap:24px;flex-wrap:wrap;">
+      <div><span class="stat-label">Total paid: </span><span class="stat-value btc" id="advTotalPaid">0</span> sats</div>
+      <div><span class="stat-label">Payments: </span><span class="stat-value" id="advPaymentCount">0</span></div>
+    </div>
+  </div>
   <div class="card">
-    <h3>Advertiser Info</h3>
-    <p style="font-size:12px;color:#8b949e;">Ed25519 Pubkey:</p>
+    <h3>Advertiser Identity</h3>
+    <p style="font-size:12px;color:#8b949e;">Ed25519 Pubkey (for attestation signatures):</p>
     <p class="mono" id="advPubkey">--</p>
   </div>
 </div>
@@ -415,6 +470,15 @@ let eventSource = null;
 let events = [];
 let eventFilter = 'all';
 let lastOutputFile = '';
+let refreshTimer = null;
+let purchases = JSON.parse(localStorage.getItem('conduit_purchases') || '[]');
+
+// Ensure a URL has an http:// prefix (registry creator_address often omits it)
+function ensureHttp(addr) {
+  if (!addr) return '';
+  if (addr.startsWith('http://') || addr.startsWith('https://')) return addr;
+  return 'http://' + addr;
+}
 
 // Populate settings from storage
 document.getElementById('settNodeUrl').value = nodeUrl;
@@ -453,15 +517,33 @@ async function connectNode() {
     document.getElementById('settStatus').textContent = 'Connected';
     document.getElementById('settStatus').className = 'status ok';
     updateWallet();
+    fetchAddress();
     connectSSE();
     loadCatalog();
     loadCreatorCatalog();
+    renderCollection();
     loadAdvertiserInfo();
     loadSeederInfo();
+    startAutoRefresh();
   } catch (e) {
     document.getElementById('settStatus').textContent = 'Failed: ' + e.message;
     document.getElementById('settStatus').className = 'status';
   }
+}
+
+// ================================================================
+// Auto-refresh (balance + catalogs every 30s)
+// ================================================================
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  refreshTimer = setInterval(async () => {
+    if (!nodeUrl) return;
+    try {
+      const r = await fetch(nodeUrl + '/api/info');
+      nodeInfo = await r.json();
+      updateWallet();
+    } catch (e) {}
+  }, 30000);
 }
 
 // ================================================================
@@ -480,7 +562,6 @@ async function updateWallet() {
   document.getElementById('wChannels').textContent = channels.length + ' (' + channels.filter(c => c.usable).length + ' usable)';
 
   const table = document.getElementById('channelTable');
-  // Remove old rows (keep header)
   while (table.rows.length > 1) table.deleteRow(1);
   document.getElementById('noChannels').style.display = channels.length ? 'none' : 'block';
   channels.forEach(ch => {
@@ -493,12 +574,31 @@ async function updateWallet() {
       <td><span class="badge ${ch.usable ? 'badge-green' : 'badge-yellow'}">${ch.usable ? 'Usable' : ch.is_channel_ready || ch.ready ? 'Ready' : 'Pending'}</span></td>
     `;
   });
+}
 
-  // Fetch address
+async function fetchAddress() {
+  if (!nodeUrl) return;
   try {
-    const r = await fetch(nodeUrl + '/api/info');
-    // address might need a separate call; for now just show node_id area
-  } catch (e) {}
+    const r = await fetch(nodeUrl + '/api/address');
+    const data = await r.json();
+    if (data.address) {
+      document.getElementById('walletAddress').textContent = data.address;
+    }
+  } catch (e) {
+    document.getElementById('walletAddress').textContent = 'Failed to fetch address';
+  }
+}
+
+function copyAddress() {
+  const addr = document.getElementById('walletAddress').textContent;
+  if (!addr || addr === '--' || addr.startsWith('Failed')) return;
+  navigator.clipboard.writeText(addr).then(() => {
+    const el = document.getElementById('walletAddress');
+    const orig = el.textContent;
+    el.textContent = 'Copied!';
+    el.style.color = '#3fb950';
+    setTimeout(() => { el.textContent = orig; el.style.color = ''; }, 1500);
+  });
 }
 
 // ================================================================
@@ -514,10 +614,11 @@ function connectSSE() {
       if (events.length > 500) events.pop();
       renderEvent(ev);
       handleBuyerEvent(ev);
+      handleCreatorEvent(ev);
     } catch (e) {}
   };
   eventSource.onerror = () => {
-    document.getElementById('nodeId').textContent = 'SSE disconnected';
+    document.getElementById('nodeId').textContent = 'SSE disconnected — reconnecting...';
   };
 }
 
@@ -543,7 +644,6 @@ document.querySelectorAll('#eventFilter button').forEach(btn => {
     document.querySelectorAll('#eventFilter button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
     eventFilter = btn.dataset.filter;
-    // Re-render
     document.getElementById('eventList').innerHTML = '';
     document.getElementById('noEvents').style.display = events.length ? 'none' : 'block';
     events.forEach(ev => renderEvent(ev));
@@ -551,14 +651,60 @@ document.querySelectorAll('#eventFilter button').forEach(btn => {
 });
 
 // ================================================================
-// Creator catalog
+// Creator: register content
+// ================================================================
+async function registerContent() {
+  const filePath = document.getElementById('regFilePath').value.trim();
+  const price = parseInt(document.getElementById('regPrice').value, 10);
+  const statusEl = document.getElementById('regStatus');
+
+  if (!filePath) { statusEl.textContent = 'File path is required'; statusEl.style.color = '#f85149'; return; }
+  if (!price || price < 1) { statusEl.textContent = 'Price must be at least 1 sat'; statusEl.style.color = '#f85149'; return; }
+  if (!nodeUrl) { statusEl.textContent = 'Connect to a node first (Settings tab)'; statusEl.style.color = '#f85149'; return; }
+
+  statusEl.textContent = 'Registering...';
+  statusEl.style.color = '#8b949e';
+
+  try {
+    const r = await fetch(nodeUrl + '/api/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file: filePath, price: price }),
+    });
+    const data = await r.json();
+    if (data.error) {
+      statusEl.textContent = 'Error: ' + data.error;
+      statusEl.style.color = '#f85149';
+    } else {
+      statusEl.textContent = 'Registration started — encrypting and cataloging...';
+      statusEl.style.color = '#3fb950';
+      // Refresh catalog after a short delay to pick up the new entry
+      setTimeout(() => loadCreatorCatalog(), 3000);
+    }
+  } catch (e) {
+    statusEl.textContent = 'Failed: ' + e.message;
+    statusEl.style.color = '#f85149';
+  }
+}
+
+// Handle creator SSE events (auto-refresh catalog on REGISTERED)
+function handleCreatorEvent(ev) {
+  if (ev.event_type === 'REGISTERED' || ev.event_type === 'ALREADY_REGISTERED') {
+    loadCreatorCatalog();
+  }
+}
+
+// ================================================================
+// Creator catalog display
 // ================================================================
 async function loadCreatorCatalog() {
   if (!nodeUrl) return;
   try {
     const r = await fetch(nodeUrl + '/api/catalog');
     const data = await r.json();
-    const items = data.catalog || data || [];
+    const allItems = data.items || data.catalog || (Array.isArray(data) ? data : []);
+    // Creator entries have price_sats > 0 or a non-empty content_hash; exclude seeder-only entries
+    const items = allItems.filter(i => (i.price_sats && i.price_sats > 0) || (i.content_hash && i.content_hash.length > 0));
     const table = document.getElementById('creatorCatalogTable');
     while (table.rows.length > 1) table.deleteRow(1);
     document.getElementById('noCreatorCatalog').style.display = items.length ? 'none' : 'block';
@@ -567,8 +713,8 @@ async function loadCreatorCatalog() {
       row.innerHTML = `
         <td>${item.file_name || '--'}</td>
         <td class="price">${item.price_sats || 0} sats</td>
-        <td>${(item.size_bytes || 0).toLocaleString()} bytes</td>
-        <td class="mono">${(item.content_hash || '').slice(0, 16)}...</td>
+        <td>${fmtSize(item.size_bytes || 0)}</td>
+        <td class="mono" title="${item.content_hash || ''}">${(item.content_hash || '').slice(0, 16)}...</td>
       `;
     });
   } catch (e) {}
@@ -578,11 +724,16 @@ async function loadCreatorCatalog() {
 // Library (buyer catalog from registry)
 // ================================================================
 async function loadCatalog() {
-  if (!registryUrl) return;
+  if (!registryUrl) {
+    document.getElementById('noLibraryCatalog').textContent = 'Enter a Registry URL in Settings to browse content';
+    return;
+  }
+  document.getElementById('noLibraryCatalog').textContent = 'Loading...';
   try {
     const r = await fetch(registryUrl + '/api/listings');
     const data = await r.json();
-    catalog = data.listings || data || [];
+    // Registry returns { items: [...] }
+    catalog = data.items || data.listings || (Array.isArray(data) ? data : []);
     renderCatalog();
   } catch (e) {
     document.getElementById('noLibraryCatalog').textContent = 'Failed to load catalog: ' + e.message;
@@ -593,17 +744,22 @@ function renderCatalog() {
   const container = document.getElementById('libraryCatalog');
   container.innerHTML = '';
   if (!catalog.length) {
-    container.innerHTML = '<p class="empty">No content available</p>';
+    container.innerHTML = '<p class="empty">No content available on registry</p>';
     return;
   }
   catalog.forEach(item => {
     const div = document.createElement('div');
     div.className = 'catalog-item' + (selectedItem && selectedItem.content_hash === item.content_hash ? ' selected' : '');
     const ext = (item.file_name || '').split('.').pop().toUpperCase();
+    let creator = '';
+    if (item.creator_address) {
+      try { creator = ' from ' + new URL(ensureHttp(item.creator_address)).hostname; }
+      catch { creator = ' from ' + item.creator_address.replace(/:\d+$/, ''); }
+    }
     div.innerHTML = `
       <div>
         <div class="name">${item.file_name || 'Unknown'}</div>
-        <div class="meta">${ext} &middot; ${(item.size_bytes || 0).toLocaleString()} bytes</div>
+        <div class="meta">${ext} &middot; ${fmtSize(item.size_bytes || 0)}${creator}</div>
       </div>
       <div class="price">${item.price_sats || 0} sats</div>
     `;
@@ -617,8 +773,9 @@ function selectItem(item) {
   renderCatalog();
   document.getElementById('buyCard').style.display = 'block';
   document.getElementById('buyTitle').textContent = item.file_name || 'Unknown';
-  document.getElementById('buyMeta').textContent = `${(item.size_bytes || 0).toLocaleString()} bytes | ${item.price_sats || 0} sats`;
+  document.getElementById('buyMeta').textContent = `${fmtSize(item.size_bytes || 0)} | ${item.price_sats || 0} sats`;
   document.getElementById('buyHash').textContent = item.content_hash || '';
+  document.getElementById('buyCreatorAddr').textContent = item.creator_address ? 'Creator: ' + item.creator_address : '';
   document.getElementById('buyBtn').disabled = false;
   document.getElementById('buyProgress').style.display = 'none';
   document.getElementById('buyProgress').innerHTML = '';
@@ -674,42 +831,79 @@ function showResult(ok, msg) {
   el.style.background = ok ? '#1a2f1a' : '#2f1a1a';
   el.style.color = ok ? '#3fb950' : '#f85149';
   el.textContent = msg;
+  document.getElementById('buyBtn').disabled = false;
 }
 
 // --- Direct buy ---
 const STEPS_DIRECT = [
-  { id: 'fetch', text: 'Fetching encrypted content' },
+  { id: 'invoice', text: 'Requesting invoice from creator' },
   { id: 'pay', text: 'Paying creator invoice' },
   { id: 'htlc', text: 'HTLC settling' },
+  { id: 'fetch', text: 'Fetching encrypted content' },
   { id: 'decrypt', text: 'Decrypting with K' },
   { id: 'verify', text: 'Verifying plaintext H(F)' },
 ];
 
 async function doBuyDirect() {
   buildSteps(STEPS_DIRECT);
-  setStep('fetch', 'active', 'Starting...');
+
+  const creatorUrl = ensureHttp(selectedItem.creator_address);
+  if (!creatorUrl) {
+    showResult(false, 'No creator address available for this listing');
+    return;
+  }
+
+  // Step 1: Request invoice from creator
+  setStep('invoice', 'active', 'Contacting creator...');
+  let invoiceData;
+  try {
+    const r = await fetch(creatorUrl + '/api/invoice/' + selectedItem.content_hash, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    invoiceData = await r.json();
+    if (invoiceData.error) {
+      setStep('invoice', 'fail', invoiceData.error);
+      showResult(false, invoiceData.error);
+      return;
+    }
+    setStep('invoice', 'done', invoiceData.price_sats + ' sats');
+  } catch (e) {
+    setStep('invoice', 'fail', e.message);
+    showResult(false, 'Failed to get invoice: ' + e.message);
+    return;
+  }
+
+  // Step 2: Pay invoice via local buyer node
+  setStep('pay', 'active', 'Sending payment...');
+  const encUrl = creatorUrl + '/api/enc/' + (invoiceData.enc_filename || '');
+  const outputFile = '/tmp/decrypted-' + Date.now() + '-' + (invoiceData.file_name || 'content');
+  lastOutputFile = outputFile.split('/').pop();
+
   try {
     const r = await fetch(nodeUrl + '/api/buy', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        invoice: selectedItem.bolt11 || '',
-        enc_url: selectedItem.creator_url ? selectedItem.creator_url + '/api/enc/' + (selectedItem.enc_filename || '') : '',
-        hash: selectedItem.content_hash,
-        output: '/tmp/decrypted-' + Date.now() + '-' + (selectedItem.file_name || 'content'),
+        invoice: invoiceData.bolt11,
+        enc_url: encUrl,
+        hash: invoiceData.content_hash,
+        output: outputFile,
       }),
     });
     const res = await r.json();
-    lastOutputFile = 'decrypted-' + Date.now() + '-' + (selectedItem.file_name || 'content');
     console.log('Direct buy started:', res);
+    // SSE events will update the remaining steps
   } catch (e) {
-    setStep('fetch', 'fail', e.message);
+    setStep('pay', 'fail', e.message);
     showResult(false, 'Failed: ' + e.message);
   }
 }
 
 // --- Chunked / seeder buy ---
 const STEPS_CHUNKED = [
+  { id: 'invoice', text: 'Requesting invoice from creator' },
   { id: 'cpay', text: 'Paying creator (content key K)' },
   { id: 'chtlc', text: 'Content HTLC settling' },
   { id: 'cmeta', text: 'Fetching chunk metadata' },
@@ -723,16 +917,56 @@ const STEPS_CHUNKED = [
 ];
 
 async function doBuyChunked(mode) {
-  buildSteps(mode === 'chunked' ? STEPS_CHUNKED : STEPS_DIRECT);
-  setStep(mode === 'chunked' ? 'cpay' : 'fetch', 'active', 'Starting...');
-  // Use the buyer node's /api/buy with appropriate mode
+  const steps = mode === 'chunked' ? STEPS_CHUNKED : STEPS_DIRECT;
+  buildSteps(steps);
+
+  const creatorUrl = ensureHttp(selectedItem.creator_address);
+  if (!creatorUrl) {
+    showResult(false, 'No creator address available for this listing');
+    return;
+  }
+
+  // Step 1: Request invoice from creator
+  setStep('invoice', 'active', 'Contacting creator...');
+  let invoiceData;
+  try {
+    const r = await fetch(creatorUrl + '/api/invoice/' + selectedItem.content_hash, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    invoiceData = await r.json();
+    if (invoiceData.error) {
+      setStep('invoice', 'fail', invoiceData.error);
+      showResult(false, invoiceData.error);
+      return;
+    }
+    setStep('invoice', 'done', invoiceData.price_sats + ' sats');
+  } catch (e) {
+    setStep('invoice', 'fail', e.message);
+    showResult(false, 'Failed to get invoice: ' + e.message);
+    return;
+  }
+
+  setStep(mode === 'chunked' ? 'cpay' : 'pay', 'active', 'Starting...');
+
+  // Discover seeders from registry
+  let seederUrls = [];
+  if (mode === 'seeder' || mode === 'chunked') {
+    try {
+      const dr = await fetch(registryUrl + '/api/discover/' + selectedItem.content_hash);
+      const dd = await dr.json();
+      seederUrls = (dd.seeders || dd.items || []).map(s => s.seeder_address).filter(Boolean);
+    } catch (e) {}
+  }
+
   const body = {
     mode: mode,
-    content_invoice: selectedItem.bolt11 || '',
-    encrypted_hash: selectedItem.encrypted_hash || '',
+    content_invoice: invoiceData.bolt11,
+    encrypted_hash: invoiceData.encrypted_hash || selectedItem.encrypted_hash || '',
     hash: selectedItem.content_hash,
     output: '/tmp/decrypted-' + Date.now() + '-' + (selectedItem.file_name || 'content'),
-    seeder_urls: [],  // TODO: populate from registry discover
+    seeder_urls: seederUrls,
   };
   try {
     const r = await fetch(nodeUrl + '/api/buy', {
@@ -741,9 +975,9 @@ async function doBuyChunked(mode) {
       body: JSON.stringify(body),
     });
     const res = await r.json();
-    console.log('Chunked buy started:', res);
+    console.log('Buy started:', res);
   } catch (e) {
-    setStep(mode === 'chunked' ? 'cpay' : 'fetch', 'fail', e.message);
+    setStep(mode === 'chunked' ? 'cpay' : 'pay', 'fail', e.message);
     showResult(false, 'Failed: ' + e.message);
   }
 }
@@ -765,16 +999,21 @@ const STEPS_AD = [
 async function doBuyAdSubsidized() {
   buildSteps(STEPS_AD);
 
-  // Need an advertiser URL -- for now look at creator URL or a configured one
-  // In a unified node, the advertiser might be a different node
-  const advertiserUrl = prompt('Enter advertiser node URL (e.g. http://ip:port):', nodeUrl);
+  const creatorUrl = ensureHttp(selectedItem.creator_address);
+  if (!creatorUrl) {
+    showResult(false, 'No creator address for this listing');
+    return;
+  }
+
+  // Prompt for advertiser URL
+  const advertiserUrl = prompt('Enter advertiser node URL (e.g. http://ip:port):', '');
   if (!advertiserUrl) { showResult(false, 'Advertiser URL required'); return; }
 
   setStep('adinv', 'active', 'Requesting invoices from creator...');
 
   let adInvoice;
   try {
-    const r = await fetch(nodeUrl + '/api/ad-invoice/' + selectedItem.content_hash, {
+    const r = await fetch(creatorUrl + '/api/ad-invoice/' + selectedItem.content_hash, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ advertiser_url: advertiserUrl }),
@@ -813,7 +1052,7 @@ async function doBuyAdSubsidized() {
   overlay.style.display = 'flex';
   const dMs = sessionData.duration_ms || 15000;
   const dSec = Math.ceil(dMs / 1000);
-  video.src = adInvoice.ad_creative_url;
+  video.src = advertiserUrl + '/api/campaigns/' + adInvoice.campaign_id + '/creative';
   video.play().catch(() => {});
   let rem = dSec;
   timer.textContent = rem + 's';
@@ -849,7 +1088,7 @@ async function doBuyAdSubsidized() {
   // Payment 1: Buyer pays 1 sat to learn K
   setStep('keypay', 'active', 'Paying 1 sat...');
   const encFilename = adInvoice.enc_filename || '';
-  const encUrl = nodeUrl + '/api/enc/' + encFilename;
+  const encUrl = creatorUrl + '/api/enc/' + encFilename;
   const baseName = (adInvoice.file_name || 'content').replace(/\.[^.]+$/, '');
   const ext = (adInvoice.file_name || '').split('.').pop() || 'bin';
   const outputFile = 'decrypted-' + Date.now() + '-' + baseName + '.' + ext;
@@ -884,11 +1123,10 @@ async function doBuyAdSubsidized() {
     });
     const res = await r.json();
     if (res.status !== 'payment_sent') {
-      setStep('adpay', 'fail', res.status);
+      setStep('adpay', 'fail', res.status || 'Unknown error');
     } else {
       setStep('adpay', 'done', 'Subsidy paid (K_ad, not K)');
       setStep('adhtlc', 'active', 'Settling...');
-      setTimeout(() => setStep('adhtlc', 'done', 'Advertiser never learned K'), 5000);
     }
   } catch (e) { setStep('adpay', 'fail', e.message); }
 }
@@ -902,7 +1140,7 @@ function handleBuyerEvent(ev) {
     case 'FETCHING_ENC':
       setStep('fetch', 'active', 'Downloading...'); break;
     case 'ENC_FETCHED':
-      setStep('fetch', 'done', (ev.data.bytes || 0) + ' bytes'); break;
+      setStep('fetch', 'done', fmtSize(ev.data.bytes || 0)); break;
     case 'FETCH_FAILED':
       setStep('fetch', 'fail', ev.data.error || 'Failed'); showResult(false, 'Download failed'); break;
     case 'BUY_ERROR':
@@ -918,13 +1156,20 @@ function handleBuyerEvent(ev) {
       break;
     case 'PAYMENT_CONFIRMED':
       if (mode === 'ad') { setStep('keyhtlc', 'done', 'K received'); setStep('fetch', 'active'); }
-      else { setStep('htlc', 'done', 'Preimage received'); setStep('decrypt', 'active'); }
+      else { setStep('htlc', 'done', 'Preimage received'); setStep('fetch', 'active'); }
       break;
     case 'PAYMENT_FAILED':
       if (mode === 'ad') setStep('keypay', 'fail', ev.data.reason || 'Failed');
       else setStep('pay', 'fail', ev.data.reason || 'Failed');
       showResult(false, 'Payment failed');
       break;
+
+    // Ad-specific hold-and-claim events
+    case 'AD_HTLC_BUYER_ARRIVED': setStep('keyhtlc', 'done', 'Buyer HTLC held'); break;
+    case 'AD_HTLC_ADVERTISER_ARRIVED': setStep('adhtlc', 'done', 'Ad HTLC held'); break;
+    case 'AD_BOTH_HTLCS_READY': setStep('adhtlc', 'done', 'Both HTLCs — claiming'); break;
+    case 'AD_CLAIMED_BUYER': setStep('keyhtlc', 'done', 'K revealed — decrypting'); setStep('fetch', 'active'); break;
+    case 'AD_CLAIMED_ADVERTISER': setStep('adhtlc', 'done', 'K_ad claimed (meaningless)'); break;
 
     case 'DECRYPTING': setStep('decrypt', 'active', 'Decrypting...'); break;
     case 'DECRYPTED': setStep('decrypt', 'done', 'Decrypted'); break;
@@ -935,6 +1180,7 @@ function handleBuyerEvent(ev) {
     case 'FILE_SAVED':
       showResult(true, 'Content purchased and verified!');
       tryPreview(ev.data);
+      recordPurchase(ev.data);
       break;
 
     // Chunked mode events
@@ -966,14 +1212,117 @@ function tryPreview(data) {
 }
 
 // ================================================================
-// Seeder info
+// Collection: purchase history (localStorage)
 // ================================================================
+function recordPurchase(data) {
+  if (!selectedItem) return;
+  const purchase = {
+    content_hash: selectedItem.content_hash || '',
+    file_name: selectedItem.file_name || data.path?.split('/').pop() || 'unknown',
+    price_sats: selectedItem.price_sats || 0,
+    size_bytes: selectedItem.size_bytes || data.bytes || 0,
+    output_path: data.path || data.output || '',
+    purchased_at: new Date().toISOString(),
+    mode: getMode(),
+    creator_address: selectedItem.creator_address || '',
+  };
+  // Avoid duplicates (same content_hash)
+  const existing = purchases.findIndex(p => p.content_hash === purchase.content_hash);
+  if (existing >= 0) purchases[existing] = purchase;
+  else purchases.unshift(purchase);
+  localStorage.setItem('conduit_purchases', JSON.stringify(purchases));
+  renderCollection();
+}
+
+function renderCollection() {
+  const container = document.getElementById('collectionList');
+  const emptyMsg = document.getElementById('noCollection');
+  if (!container) return;
+  container.innerHTML = '';
+  emptyMsg.style.display = purchases.length ? 'none' : 'block';
+  purchases.forEach((p, idx) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px;border:1px solid #21262d;border-radius:8px;margin-bottom:8px;background:#161b22;';
+    const ext = (p.file_name || '').split('.').pop().toUpperCase();
+    const fileName = p.output_path ? p.output_path.split('/').pop() : '';
+    const previewUrl = fileName && nodeUrl ? nodeUrl + '/api/decrypted/' + fileName : '';
+    const date = p.purchased_at ? new Date(p.purchased_at).toLocaleDateString() : '';
+    const modeLabel = p.mode === 'ad' ? 'Ad-subsidized' : p.mode === 'chunked' ? 'Chunked' : p.mode === 'seeder' ? 'Seeder' : 'Direct';
+    div.innerHTML = `
+      <div style="flex:1;">
+        <div style="font-weight:600;color:#e6edf3;">${p.file_name || 'Unknown'}</div>
+        <div style="font-size:11px;color:#8b949e;margin-top:2px;">
+          ${ext} &middot; ${fmtSize(p.size_bytes || 0)} &middot; ${p.price_sats} sats &middot; ${modeLabel} &middot; ${date}
+        </div>
+        <div class="mono" style="font-size:10px;color:#484f58;margin-top:2px;">${(p.content_hash || '').slice(0, 32)}...</div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        ${previewUrl ? `<a href="${previewUrl}" target="_blank" class="btn btn-secondary" style="font-size:11px;padding:4px 10px;text-decoration:none;">Open</a>` : ''}
+        <button class="btn btn-secondary" style="font-size:11px;padding:4px 10px;color:#f85149;" onclick="removePurchase(${idx})">Remove</button>
+      </div>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function removePurchase(idx) {
+  purchases.splice(idx, 1);
+  localStorage.setItem('conduit_purchases', JSON.stringify(purchases));
+  renderCollection();
+}
+
+// ================================================================
+// Seeder: register + display
+// ================================================================
+async function registerSeed() {
+  const filePath = document.getElementById('seedFilePath').value.trim();
+  const encHash = document.getElementById('seedEncHash').value.trim();
+  const price = parseInt(document.getElementById('seedPrice').value, 10);
+  const statusEl = document.getElementById('seedStatus');
+
+  if (!filePath) { statusEl.textContent = 'Encrypted file path is required'; statusEl.style.color = '#f85149'; return; }
+  if (!encHash) { statusEl.textContent = 'Encrypted hash is required'; statusEl.style.color = '#f85149'; return; }
+  if (!price || price < 1) { statusEl.textContent = 'Transport price must be at least 1 sat'; statusEl.style.color = '#f85149'; return; }
+  if (!nodeUrl) { statusEl.textContent = 'Connect to a node first (Settings tab)'; statusEl.style.color = '#f85149'; return; }
+
+  statusEl.textContent = 'Registering seed...';
+  statusEl.style.color = '#8b949e';
+
+  try {
+    const r = await fetch(nodeUrl + '/api/seed', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        encrypted_file: filePath,
+        encrypted_hash: encHash,
+        transport_price: price,
+      }),
+    });
+    const data = await r.json();
+    if (data.error) {
+      statusEl.textContent = 'Error: ' + data.error;
+      statusEl.style.color = '#f85149';
+    } else {
+      statusEl.textContent = 'Seed registered successfully';
+      statusEl.style.color = '#3fb950';
+      setTimeout(() => loadSeederInfo(), 2000);
+    }
+  } catch (e) {
+    statusEl.textContent = 'Failed: ' + e.message;
+    statusEl.style.color = '#f85149';
+  }
+}
+
 async function loadSeederInfo() {
   if (!nodeUrl) return;
   try {
     const r = await fetch(nodeUrl + '/api/catalog');
     const data = await r.json();
-    const items = (data.catalog || data || []).filter(i => i.chunks_held && i.chunks_held.length > 0 || i.seeding);
+    // Seeder entries have transport_price > 0 or chunks_held
+    const items = (data.items || data.catalog || (Array.isArray(data) ? data : [])).filter(i =>
+      (i.transport_price && i.transport_price > 0) ||
+      (i.chunks_held && i.chunks_held.length > 0)
+    );
     const table = document.getElementById('seederTable');
     while (table.rows.length > 1) table.deleteRow(1);
     document.getElementById('noSeeds').style.display = items.length ? 'none' : 'block';
@@ -981,8 +1330,9 @@ async function loadSeederInfo() {
       const row = table.insertRow();
       row.innerHTML = `
         <td>${item.file_name || '--'}</td>
-        <td>${(item.chunks_held || []).length || item.chunk_count || '--'}</td>
-        <td class="mono">${(item.encrypted_hash || '').slice(0, 16)}...</td>
+        <td>${item.chunk_count || (item.chunks_held || []).length || '--'}</td>
+        <td class="price">${item.transport_price || 0} sats</td>
+        <td class="mono" title="${item.encrypted_hash || ''}">${(item.encrypted_hash || '').slice(0, 16)}...</td>
       `;
     });
   } catch (e) {}
@@ -999,7 +1349,15 @@ async function loadAdvertiserInfo() {
     const status = document.getElementById('advStatus');
     if (info.enabled) {
       status.innerHTML = '<span class="badge badge-green">Enabled</span>';
+      document.getElementById('advEnableHint').style.display = 'none';
       document.getElementById('advPubkey').textContent = info.advertiser_pubkey || '--';
+
+      // Show stats if available
+      if (info.total_paid_sats || info.payment_count) {
+        document.getElementById('advStatsCard').style.display = 'block';
+        document.getElementById('advTotalPaid').textContent = (info.total_paid_sats || 0).toLocaleString();
+        document.getElementById('advPaymentCount').textContent = (info.payment_count || 0).toLocaleString();
+      }
 
       // Load campaigns
       const cr = await fetch(nodeUrl + '/api/campaigns');
@@ -1014,13 +1372,15 @@ async function loadAdvertiserInfo() {
         row.innerHTML = `
           <td>${c.name || '--'}</td>
           <td class="price">${c.subsidy_sats || 0} sats</td>
-          <td>${(c.budget_spent_sats || 0).toLocaleString()} / ${(c.budget_total_sats || 0).toLocaleString()} sats (${pct}%)</td>
-          <td>${c.duration_ms || 0} ms</td>
+          <td>${(c.budget_spent_sats || 0).toLocaleString()} sats</td>
+          <td>${(c.budget_total_sats || 0).toLocaleString()} sats (${pct}% used)</td>
+          <td>${(c.duration_ms || 0) / 1000}s</td>
           <td><span class="badge ${c.active ? 'badge-green' : 'badge-red'}">${c.active ? 'Active' : 'Paused'}</span></td>
         `;
       });
     } else {
-      status.innerHTML = '<span class="badge badge-yellow">Not enabled</span> <span style="font-size:12px;color:#8b949e;margin-left:8px;">Start node with --ads-dir to enable</span>';
+      status.innerHTML = '<span class="badge badge-yellow">Not enabled</span>';
+      document.getElementById('advEnableHint').style.display = 'block';
     }
   } catch (e) {
     document.getElementById('advStatus').innerHTML = '<span class="badge badge-red">Error</span> <span style="font-size:12px;color:#8b949e;">' + e.message + '</span>';
@@ -1028,8 +1388,18 @@ async function loadAdvertiserInfo() {
 }
 
 // ================================================================
+// Utility
+// ================================================================
+function fmtSize(b) {
+  if (b < 1024) return b + ' B';
+  if (b < 1048576) return (b / 1024).toFixed(1) + ' KB';
+  return (b / 1048576).toFixed(1) + ' MB';
+}
+
+// ================================================================
 // Auto-connect on load
 // ================================================================
+renderCollection();  // Show purchases from localStorage immediately
 if (nodeUrl) {
   connectNode();
 }
