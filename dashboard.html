@@ -602,10 +602,23 @@ function copyAddress() {
 }
 
 // ================================================================
-// SSE events
+// SSE events (history backfill then live stream)
 // ================================================================
-function connectSSE() {
+async function connectSSE() {
   if (eventSource) eventSource.close();
+  // Backfill from persistent log (oldest-first from API; prepend in reverse so newest at top)
+  try {
+    const r = await fetch(nodeUrl + '/api/events/history?limit=500');
+    const history = await r.json();
+    if (Array.isArray(history) && history.length) {
+      for (let i = history.length - 1; i >= 0; i--) {
+        const ev = history[i];
+        events.unshift(ev);
+        renderEvent(ev);
+      }
+      if (events.length > 500) events.splice(500);
+    }
+  } catch (e) {}
   eventSource = new EventSource(nodeUrl + '/api/events');
   eventSource.onmessage = (msg) => {
     try {
@@ -1241,6 +1254,7 @@ function tryPreview(data) {
   if (!file || !nodeUrl) return;
   const url = nodeUrl + '/api/decrypted/' + file.split('/').pop();
   const ext = file.split('.').pop().toLowerCase();
+  const fname = file.split('/').pop();
   container.style.display = 'block';
   if (['mp3', 'ogg', 'wav', 'opus', 'flac', 'aac', 'm4a'].includes(ext)) {
     container.innerHTML = `<audio controls src="${url}" style="width:100%;"></audio>`;
@@ -1248,8 +1262,15 @@ function tryPreview(data) {
     container.innerHTML = `<video controls src="${url}" style="width:100%;"></video>`;
   } else if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext)) {
     container.innerHTML = `<img src="${url}" alt="Preview">`;
+  } else if (ext === 'pdf') {
+    container.innerHTML = `<embed src="${url}" type="application/pdf" style="width:100%;height:500px;">
+      <p><a href="${url}" target="_blank" class="btn btn-secondary">Open PDF: ${fname}</a></p>`;
   } else {
-    container.innerHTML = `<a href="${url}" target="_blank" class="btn btn-secondary">Download ${file.split('/').pop()}</a>`;
+    container.innerHTML = `<div style="text-align:center;padding:1.5rem;">
+      <div style="font-size:2rem;margin-bottom:0.5rem;">📄</div>
+      <div style="color:#888;margin-bottom:0.8rem;">${ext.toUpperCase()} file &middot; ${fname}</div>
+      <a href="${url}" target="_blank" class="btn btn-secondary" style="display:inline-block;padding:0.5rem 1.2rem;background:#222;color:#fff;border-radius:6px;text-decoration:none;">Download</a>
+    </div>`;
   }
 }
 
