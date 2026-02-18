@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conduit</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
 /* ================================================================ */
 /* Reset & base                                                      */
@@ -197,6 +198,25 @@ tr:hover td { background: #1c2128; }
 .preview-container { margin-top: 16px; text-align: center; }
 .preview-container audio, .preview-container video { max-width: 100%; border-radius: 8px; }
 .preview-container img { max-width: 100%; max-height: 300px; border-radius: 8px; }
+
+/* ================================================================ */
+/* Network visualization                                             */
+/* ================================================================ */
+#tab-network { max-width: 100%; padding: 16px; }
+#tab-network .card { max-width: none; }
+#networkGraph { position: relative; background: #0d1117; border: 1px solid #21262d; border-radius: 8px; overflow: hidden; }
+#networkGraph svg { display: block; width: 100%; height: 100%; }
+.net-legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: #8b949e; }
+.net-legend-item { display: flex; align-items: center; gap: 6px; }
+.net-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.net-tooltip {
+  position: absolute; pointer-events: none; background: #161b22; border: 1px solid #30363d;
+  border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #e6edf3; line-height: 1.6;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 100; white-space: nowrap; display: none;
+}
+.net-tooltip .tt-label { color: #8b949e; }
+.net-tooltip .tt-value { color: #e6edf3; font-weight: 600; }
+.net-status { font-size: 12px; color: #8b949e; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -228,6 +248,7 @@ tr:hover td { background: #1c2128; }
   <button data-tab="collection">Collection</button>
   <button data-tab="seeder">Seeder</button>
   <button data-tab="advertiser">Advertiser</button>
+  <button data-tab="network">Network</button>
   <button data-tab="events">Events</button>
   <button data-tab="settings">Settings</button>
 </div>
@@ -308,7 +329,8 @@ tr:hover td { background: #1c2128; }
     <p style="font-size:11px;color:#484f58;margin-bottom:8px;" id="buyCreatorAddr">--</p>
 
     <div class="mode-row">
-      <label><input type="radio" name="buyMode" value="direct" checked> Direct</label>
+      <label><input type="radio" name="buyMode" value="pre" checked> PRE</label>
+      <label><input type="radio" name="buyMode" value="direct"> Direct</label>
       <label><input type="radio" name="buyMode" value="seeder"> Seeder</label>
       <label><input type="radio" name="buyMode" value="chunked"> Chunked</label>
       <label><input type="radio" name="buyMode" value="ad"> Free (ad)</label>
@@ -418,6 +440,31 @@ tr:hover td { background: #1c2128; }
 </div>
 
 <!-- ============================================================== -->
+<!-- TAB: Network                                                    -->
+<!-- ============================================================== -->
+<div class="tab-content" id="tab-network">
+  <div class="card">
+    <h3>Network Topology</h3>
+    <p style="font-size:12px;color:#8b949e;margin-bottom:12px;">
+      Lightning channels (solid lines) and content distribution (dashed lines) across all discovered nodes.
+    </p>
+    <div id="networkGraph" style="height:520px;">
+      <div class="net-tooltip" id="netTooltip"></div>
+    </div>
+    <div class="net-legend" id="netLegend">
+      <div class="net-legend-item"><div class="net-legend-dot" style="background:#f0883e;"></div>This Node</div>
+      <div class="net-legend-item"><div class="net-legend-dot" style="background:#58a6ff;"></div>Creator</div>
+      <div class="net-legend-item"><div class="net-legend-dot" style="background:#3fb950;"></div>Seeder</div>
+      <div class="net-legend-item"><div class="net-legend-dot" style="background:#bc8cff;"></div>Advertiser</div>
+      <div class="net-legend-item"><div class="net-legend-dot" style="background:#8b949e;"></div>Peer</div>
+      <div class="net-legend-item"><span style="display:inline-block;width:24px;border-top:2px solid #8b949e;"></span>Channel</div>
+      <div class="net-legend-item"><span style="display:inline-block;width:24px;border-top:2px dashed #30363d;"></span>Seeds content</div>
+    </div>
+    <div class="net-status" id="netStatus"></div>
+  </div>
+</div>
+
+<!-- ============================================================== -->
 <!-- TAB: Events                                                     -->
 <!-- ============================================================== -->
 <div class="tab-content" id="tab-events">
@@ -493,6 +540,7 @@ document.querySelectorAll('.tab-bar button').forEach(btn => {
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
     btn.classList.add('active');
     document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'network' && !netGraphBuilt) loadNetworkGraph();
   });
 });
 
@@ -812,7 +860,8 @@ async function doBuy() {
   document.getElementById('buyResult').style.display = 'none';
   document.getElementById('buyPreview').style.display = 'none';
 
-  if (mode === 'direct') await doBuyDirect();
+  if (mode === 'pre') await doBuyPre();
+  else if (mode === 'direct') await doBuyDirect();
   else if (mode === 'ad') await doBuyAdSubsidized();
   else await doBuyChunked(mode);
 }
@@ -845,6 +894,88 @@ function showResult(ok, msg) {
   el.style.color = ok ? '#3fb950' : '#f85149';
   el.textContent = msg;
   document.getElementById('buyBtn').disabled = false;
+}
+
+// --- PRE buy ---
+const STEPS_PRE = [
+  { id: 'preinfo', text: 'Getting buyer PRE public key' },
+  { id: 'prepurchase', text: 'Requesting PRE invoice from creator' },
+  { id: 'pay', text: 'Paying Lightning invoice' },
+  { id: 'htlc', text: 'HTLC settling (preimage = SHA-256(rk))' },
+  { id: 'prekey', text: 'Recovering AES key via PRE' },
+  { id: 'fetch', text: 'Downloading encrypted chunks' },
+  { id: 'decrypt', text: 'Decrypting with recovered key' },
+  { id: 'verify', text: 'Verifying plaintext H(F)' },
+];
+
+async function doBuyPre() {
+  buildSteps(STEPS_PRE);
+
+  const creatorUrl = ensureHttp(selectedItem.creator_address);
+  if (!creatorUrl) {
+    showResult(false, 'No creator address available for this listing');
+    return;
+  }
+
+  if (!nodeUrl) {
+    showResult(false, 'Set your node URL first (Settings tab)');
+    return;
+  }
+
+  // Step 1: Get buyer's PRE public key from local node
+  setStep('preinfo', 'active', 'Fetching G2 public key...');
+  let buyerPkHex;
+  try {
+    const r = await fetch(nodeUrl + '/api/pre-info');
+    const info = await r.json();
+    buyerPkHex = info.buyer_pk_hex;
+    if (!buyerPkHex) throw new Error('No buyer_pk_hex in response');
+    setStep('preinfo', 'done', 'G2 pk: ' + buyerPkHex.substring(0, 16) + '...');
+  } catch (e) {
+    setStep('preinfo', 'fail', e.message);
+    showResult(false, 'Failed to get buyer PRE key. Is your node running the PRE build?');
+    return;
+  }
+
+  // Step 2: Call creator /api/pre-purchase with buyer pk
+  setStep('prepurchase', 'active', 'Contacting creator...');
+  try {
+    const outputFile = '/tmp/decrypted-pre-' + Date.now() + '-' + (selectedItem.file_name || 'content');
+    lastOutputFile = outputFile.split('/').pop();
+
+    // Determine seeder URL (if available from registry)
+    let seederUrl = null;
+    if (registryUrl) {
+      try {
+        const dr = await fetch(registryUrl + '/api/discover/' + selectedItem.content_hash);
+        const dd = await dr.json();
+        if (dd.seeders && dd.seeders.length > 0) {
+          seederUrl = ensureHttp(dd.seeders[0].address);
+        }
+      } catch (_) { /* no seeder, fall back to creator */ }
+    }
+
+    setStep('prepurchase', 'done', selectedItem.price_sats + ' sats');
+
+    // Step 3: Trigger PRE buy on local node (it handles everything)
+    setStep('pay', 'active', 'Initiating PRE payment...');
+    const r = await fetch(nodeUrl + '/api/buy-pre', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        creator_url: creatorUrl,
+        content_hash: selectedItem.content_hash,
+        seeder_url: seederUrl,
+        output: outputFile,
+      }),
+    });
+    const res = await r.json();
+    console.log('PRE buy started:', res);
+    // SSE events will drive the remaining step updates
+  } catch (e) {
+    setStep('prepurchase', 'fail', e.message);
+    showResult(false, 'PRE purchase failed: ' + e.message);
+  }
 }
 
 // --- Direct buy ---
@@ -1153,6 +1284,32 @@ async function doBuyAdSubsidized() {
 function handleBuyerEvent(ev) {
   const mode = getMode();
   switch (ev.event_type) {
+
+    // ---- PRE-specific events ----
+    case 'PRE_BUY_START':
+      setStep('pay', 'active', 'Contacting creator...');
+      break;
+    case 'PRE_PURCHASE_RECEIVED':
+      setStep('prepurchase', 'done', (ev.data.price_sats || '?') + ' sats');
+      setStep('pay', 'active', 'Paying invoice...');
+      break;
+    case 'PRE_PAYMENT_CONFIRMED':
+      setStep('htlc', 'done', 'Preimage = SHA-256(rk)');
+      setStep('prekey', 'active', 'Decrypting via PRE...');
+      break;
+    case 'PRE_KEY_RECOVERED':
+      setStep('prekey', 'done', 'AES key recovered');
+      setStep('fetch', 'active', 'Downloading chunks...');
+      break;
+    case 'DOWNLOADING_CHUNKS':
+      setStep('fetch', 'active', (ev.data.chunks || '?') + ' chunks from ' + (ev.data.source || 'seeder'));
+      break;
+    case 'CHUNKS_DOWNLOADED':
+      setStep('fetch', 'done', fmtSize(ev.data.total_bytes || 0));
+      setStep('decrypt', 'active', 'Decrypting...');
+      break;
+
+    // ---- General events ----
     case 'FETCHING_ENC':
       setStep('fetch', 'active', 'Downloading...'); break;
     case 'ENC_FETCHED':
@@ -1449,6 +1606,336 @@ async function loadAdvertiserInfo() {
     document.getElementById('advStatus').innerHTML = '<span class="badge badge-red">Error</span> <span style="font-size:12px;color:#8b949e;">' + e.message + '</span>';
   }
 }
+
+// ================================================================
+// Network visualization (Scope 2: full network via fan-out)
+// ================================================================
+let netGraphBuilt = false;
+
+async function loadNetworkGraph() {
+  const status = document.getElementById('netStatus');
+  const container = document.getElementById('networkGraph');
+  if (!nodeUrl) { status.textContent = 'Connect to a node first (Settings tab).'; return; }
+
+  status.textContent = 'Discovering network...';
+
+  // -- 1. Collect data from this node + registry + all discovered nodes --
+  const nodes = new Map();   // pubkey -> { id, label, role, address, channels:[] }
+  const channels = [];       // { source, target, capacity, outbound, inbound, usable }
+  const contentEdges = [];   // { creatorPk, seederPk, fileName }
+  const seenChannels = new Set();
+
+  function addNode(pk, role, address, alias) {
+    if (!pk) return;
+    const existing = nodes.get(pk);
+    if (existing) {
+      if (role !== 'peer' && existing.role === 'peer') existing.role = role;
+      if (address && !existing.address) existing.address = address;
+      if (alias && !existing.alias) { existing.alias = alias; existing.label = alias; }
+    } else {
+      const displayLabel = alias || (pk.slice(0, 8) + '...');
+      nodes.set(pk, { id: pk, label: displayLabel, alias: alias || '', role: role || 'peer', address: address || '' });
+    }
+  }
+
+  function addChannels(ownerPk, chList) {
+    (chList || []).forEach(ch => {
+      const cpk = ch.counterparty_node_id;
+      if (!cpk) return;
+      const key = [ownerPk, cpk].sort().join(':') + ':' + (ch.channel_id || ch.value_sats);
+      if (seenChannels.has(key)) return;
+      seenChannels.add(key);
+      addNode(cpk, 'peer', '');
+      channels.push({
+        source: ownerPk, target: cpk,
+        capacity: ch.value_sats || ch.channel_value_sats || 0,
+        outbound: Math.round((ch.outbound_msat || ch.outbound_capacity_msat || 0) / 1000),
+        inbound: Math.round((ch.inbound_msat || ch.inbound_capacity_msat || 0) / 1000),
+        usable: ch.usable || ch.is_usable || false,
+        ready: ch.ready || ch.is_channel_ready || false,
+      });
+    });
+  }
+
+  // Fetch with timeout helper
+  async function fetchJson(url, timeoutMs) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs || 5000);
+    try {
+      const r = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(timer);
+      return await r.json();
+    } catch (e) {
+      clearTimeout(timer);
+      return null;
+    }
+  }
+
+  // -- 1a. This node's info --
+  let selfPk = null;
+  try {
+    const info = await fetchJson(nodeUrl + '/api/info', 5000);
+    if (info && info.node_id) {
+      selfPk = info.node_id;
+      addNode(selfPk, 'self', nodeUrl, info.node_alias || '');
+      addChannels(selfPk, info.channels);
+    }
+  } catch (e) {}
+
+  // -- 1b. Registry data --
+  let listings = [], seeders = [];
+  if (registryUrl) {
+    const [lr, sr] = await Promise.all([
+      fetchJson(registryUrl + '/api/listings', 5000),
+      fetchJson(registryUrl + '/api/seeders?all=1', 5000),
+    ]);
+    listings = (lr && lr.items) || [];
+    seeders = (sr && sr.items) || [];
+  }
+
+  // Index creators and seeders
+  const creatorAddrs = new Map();
+  listings.forEach(l => {
+    const pk = l.creator_pubkey;
+    const addr = ensureHttp(l.creator_address || l.creator_ln_address);
+    if (pk) { addNode(pk, 'creator', addr, l.creator_alias || ''); creatorAddrs.set(pk, addr); }
+  });
+
+  const seederAddrs = new Map();
+  seeders.forEach(s => {
+    const pk = s.seeder_pubkey;
+    const addr = ensureHttp(s.seeder_address || s.seeder_ln_address);
+    if (pk) { addNode(pk, 'seeder', addr, s.seeder_alias || ''); seederAddrs.set(pk, addr); }
+  });
+
+  // Build content edges: which seeders carry which creators' content
+  const contentMap = new Map();
+  listings.forEach(l => { if (l.encrypted_hash && l.creator_pubkey) contentMap.set(l.encrypted_hash, l); });
+  seeders.forEach(s => {
+    const listing = contentMap.get(s.encrypted_hash);
+    if (listing && listing.creator_pubkey && s.seeder_pubkey && listing.creator_pubkey !== s.seeder_pubkey) {
+      const key = listing.creator_pubkey + ':' + s.seeder_pubkey;
+      if (!contentEdges.find(e => e.key === key)) {
+        contentEdges.push({ key, creatorPk: listing.creator_pubkey, seederPk: s.seeder_pubkey, fileName: listing.file_name || '' });
+      }
+    }
+  });
+
+  // -- 1c. Fan out to all discovered node addresses --
+  status.textContent = 'Querying discovered nodes...';
+  const addressesToQuery = new Set();
+  creatorAddrs.forEach((addr) => { if (addr && addr !== nodeUrl) addressesToQuery.add(addr); });
+  seederAddrs.forEach((addr) => { if (addr && addr !== nodeUrl) addressesToQuery.add(addr); });
+  // Also check channel peers that might have known addresses
+  nodes.forEach(n => { if (n.address && n.address !== nodeUrl) addressesToQuery.add(n.address); });
+
+  const fanOutResults = await Promise.allSettled(
+    [...addressesToQuery].map(addr => fetchJson(addr + '/api/info', 4000))
+  );
+  fanOutResults.forEach(r => {
+    if (r.status === 'fulfilled' && r.value && r.value.node_id) {
+      const info = r.value;
+      if (info.node_alias) {
+        const existingNode = nodes.get(info.node_id);
+        if (existingNode && !existingNode.alias) {
+          existingNode.alias = info.node_alias;
+          existingNode.label = info.node_alias;
+        }
+      }
+      addChannels(info.node_id, info.channels);
+    }
+  });
+
+  // Detect advertiser: node with /api/campaigns endpoint
+  const advChecks = await Promise.allSettled(
+    [...addressesToQuery].map(async addr => {
+      const r = await fetchJson(addr + '/api/campaigns', 3000);
+      if (r && (r.campaigns !== undefined)) {
+        // Find which node this address belongs to
+        for (const [pk, n] of nodes) {
+          if (n.address === addr && n.role !== 'self') { n.role = 'advertiser'; break; }
+        }
+      }
+    })
+  );
+
+  // -- 2. Build D3 graph --
+  const nodeArr = [...nodes.values()];
+  const linkArr = [];
+
+  // Channel edges
+  channels.forEach(ch => {
+    if (nodes.has(ch.source) && nodes.has(ch.target)) {
+      linkArr.push({
+        source: ch.source, target: ch.target,
+        type: 'channel', capacity: ch.capacity,
+        outbound: ch.outbound, inbound: ch.inbound,
+        usable: ch.usable, ready: ch.ready,
+      });
+    }
+  });
+
+  // Content edges
+  contentEdges.forEach(ce => {
+    if (nodes.has(ce.creatorPk) && nodes.has(ce.seederPk)) {
+      linkArr.push({
+        source: ce.creatorPk, target: ce.seederPk,
+        type: 'content', fileName: ce.fileName,
+      });
+    }
+  });
+
+  status.textContent = nodeArr.length + ' nodes, ' + channels.length + ' channels, ' + contentEdges.length + ' content links';
+
+  renderNetworkGraph(container, nodeArr, linkArr, selfPk);
+}
+
+function renderNetworkGraph(container, nodeArr, linkArr, selfPk) {
+  // Clear previous SVG
+  d3.select(container).select('svg').remove();
+
+  const width = container.clientWidth;
+  const height = container.clientHeight || 520;
+
+  const svg = d3.select(container).append('svg')
+    .attr('width', width).attr('height', height)
+    .attr('viewBox', [0, 0, width, height]);
+
+  // Zoom
+  const g = svg.append('g');
+  svg.call(d3.zoom().scaleExtent([0.3, 5]).on('zoom', (e) => g.attr('transform', e.transform)));
+
+  // Role colors
+  const roleColor = { self: '#f0883e', creator: '#58a6ff', seeder: '#3fb950', advertiser: '#bc8cff', peer: '#8b949e' };
+  const roleRadius = { self: 18, creator: 14, seeder: 12, advertiser: 13, peer: 10 };
+
+  // Arrow marker for content edges
+  svg.append('defs').append('marker')
+    .attr('id', 'arrowContent').attr('viewBox', '0 -4 8 8').attr('refX', 24).attr('refY', 0)
+    .attr('markerWidth', 6).attr('markerHeight', 6).attr('orient', 'auto')
+    .append('path').attr('d', 'M0,-4L8,0L0,4').attr('fill', '#30363d');
+
+  // Force simulation
+  const sim = d3.forceSimulation(nodeArr)
+    .force('link', d3.forceLink(linkArr).id(d => d.id).distance(d => d.type === 'channel' ? 140 : 200))
+    .force('charge', d3.forceManyBody().strength(-400))
+    .force('center', d3.forceCenter(width / 2, height / 2))
+    .force('collision', d3.forceCollide().radius(d => (roleRadius[d.role] || 10) + 8));
+
+  // Links
+  const link = g.append('g').selectAll('line').data(linkArr).join('line')
+    .attr('stroke', d => d.type === 'channel' ? (d.usable ? '#58a6ff' : '#484f58') : '#30363d')
+    .attr('stroke-width', d => {
+      if (d.type === 'content') return 1;
+      return Math.max(1.5, Math.min(5, (d.capacity || 0) / 50000));
+    })
+    .attr('stroke-dasharray', d => d.type === 'content' ? '4,4' : null)
+    .attr('marker-end', d => d.type === 'content' ? 'url(#arrowContent)' : null)
+    .attr('pointer-events', 'stroke');
+
+  // Node groups
+  const node = g.append('g').selectAll('g').data(nodeArr).join('g')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => { if (!e.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+    );
+
+  // Node circles
+  node.append('circle')
+    .attr('r', d => roleRadius[d.role] || 10)
+    .attr('fill', d => roleColor[d.role] || '#8b949e')
+    .attr('stroke', d => d.role === 'self' ? '#f0883e' : '#21262d')
+    .attr('stroke-width', d => d.role === 'self' ? 3 : 1.5);
+
+  // Node labels (alias or role name)
+  node.append('text')
+    .text(d => {
+      if (d.alias) return d.alias;
+      if (d.role === 'self') return 'You';
+      return d.role.charAt(0).toUpperCase() + d.role.slice(1);
+    })
+    .attr('dy', d => (roleRadius[d.role] || 10) + 14)
+    .attr('text-anchor', 'middle')
+    .attr('fill', d => d.alias ? '#e6edf3' : '#8b949e')
+    .attr('font-size', '11px')
+    .attr('font-weight', d => (d.role === 'self' || d.alias) ? '600' : '400');
+
+  // Pubkey below name
+  node.append('text')
+    .text(d => d.id.slice(0, 8) + '...')
+    .attr('dy', d => (roleRadius[d.role] || 10) + 26)
+    .attr('text-anchor', 'middle')
+    .attr('fill', '#484f58')
+    .attr('font-size', '9px')
+    .attr('font-family', "'SF Mono', monospace");
+
+  // Tooltip
+  const tooltip = d3.select('#netTooltip');
+
+  node.on('mouseenter', (e, d) => {
+    let html = '';
+    if (d.alias) html += '<span class="tt-label">Alias:</span> <span class="tt-value" style="font-weight:700;">' + d.alias + '</span><br>';
+    html += '<span class="tt-label">Node ID:</span> <span class="tt-value">' + d.id.slice(0, 24) + '...</span><br>';
+    html += '<span class="tt-label">Role:</span> <span class="tt-value">' + d.role + '</span><br>';
+    if (d.address) html += '<span class="tt-label">Address:</span> <span class="tt-value">' + d.address + '</span><br>';
+    // Find channels for this node
+    const nodeChannels = linkArr.filter(l => l.type === 'channel' && (l.source.id === d.id || l.target.id === d.id));
+    if (nodeChannels.length) {
+      html += '<span class="tt-label">Channels:</span> <span class="tt-value">' + nodeChannels.length + '</span><br>';
+      let totalCap = 0;
+      nodeChannels.forEach(c => totalCap += (c.capacity || 0));
+      html += '<span class="tt-label">Total capacity:</span> <span class="tt-value">' + totalCap.toLocaleString() + ' sats</span>';
+    }
+    tooltip.html(html).style('display', 'block');
+    const rect = container.getBoundingClientRect();
+    tooltip.style('left', (e.clientX - rect.left + 14) + 'px').style('top', (e.clientY - rect.top - 10) + 'px');
+  })
+  .on('mousemove', (e) => {
+    const rect = container.getBoundingClientRect();
+    tooltip.style('left', (e.clientX - rect.left + 14) + 'px').style('top', (e.clientY - rect.top - 10) + 'px');
+  })
+  .on('mouseleave', () => tooltip.style('display', 'none'));
+
+  // Channel edge tooltips
+  link.on('mouseenter', (e, d) => {
+    let html = '';
+    if (d.type === 'channel') {
+      html += '<span class="tt-label">Channel</span><br>';
+      html += '<span class="tt-label">Capacity:</span> <span class="tt-value">' + (d.capacity || 0).toLocaleString() + ' sats</span><br>';
+      html += '<span class="tt-label">Outbound:</span> <span class="tt-value">' + (d.outbound || 0).toLocaleString() + ' sats</span><br>';
+      html += '<span class="tt-label">Inbound:</span> <span class="tt-value">' + (d.inbound || 0).toLocaleString() + ' sats</span><br>';
+      html += '<span class="tt-label">Status:</span> <span class="tt-value">' + (d.usable ? 'Usable' : d.ready ? 'Ready' : 'Pending') + '</span>';
+    } else {
+      html += '<span class="tt-label">Content link</span><br>';
+      if (d.fileName) html += '<span class="tt-label">File:</span> <span class="tt-value">' + d.fileName + '</span>';
+    }
+    tooltip.html(html).style('display', 'block');
+    const rect = container.getBoundingClientRect();
+    tooltip.style('left', (e.clientX - rect.left + 14) + 'px').style('top', (e.clientY - rect.top - 10) + 'px');
+  })
+  .on('mousemove', (e) => {
+    const rect = container.getBoundingClientRect();
+    tooltip.style('left', (e.clientX - rect.left + 14) + 'px').style('top', (e.clientY - rect.top - 10) + 'px');
+  })
+  .on('mouseleave', () => tooltip.style('display', 'none'));
+
+  // Simulation tick
+  sim.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+// Hook into tab switching: load network when tab is activated
+const origTabHandler = document.querySelectorAll('.tab-bar button');
+origTabHandler.forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (btn.dataset.tab === 'network' && nodeUrl) loadNetworkGraph();
+  });
+});
 
 // ================================================================
 // Utility
