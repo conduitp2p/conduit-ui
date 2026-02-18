@@ -3,8 +3,14 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0d1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Conduit">
 <title>Conduit</title>
+<link rel="manifest" href="/manifest.json">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <style>
 /* ================================================================ */
@@ -186,6 +192,11 @@ tr:hover td { background: #1c2128; }
   color: #a371f7; background: #1f1a2e; border: 1px solid #362b54;
   border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
 }
+.catalog-item .device-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  color: #f0883e; background: #2a1f0e; border: 1px solid #4a3520;
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
 
 /* ================================================================ */
 /* Ad overlay                                                        */
@@ -337,6 +348,10 @@ tr:hover td { background: #1c2128; }
     <p id="buyMeta" style="font-size:12px;color:#8b949e;margin-bottom:8px;">--</p>
     <p class="mono" id="buyHash" style="margin-bottom:12px;">--</p>
     <p style="font-size:11px;color:#484f58;margin-bottom:8px;" id="buyCreatorAddr">--</p>
+
+    <div id="deviceNotice" style="display:none;background:#2a1f0e;border:1px solid #4a3520;border-radius:8px;padding:8px 12px;margin-bottom:8px;font-size:12px;color:#f0883e;">
+      This content requires a verified TEE device for playback.
+    </div>
 
     <div class="mode-row">
       <label><input type="radio" name="buyMode" value="pre" checked> PRE</label>
@@ -500,6 +515,20 @@ tr:hover td { background: #1c2128; }
     <div class="status" id="settStatus">Not connected</div>
     <button class="btn btn-primary" style="margin-top:10px;" onclick="connectNode()">Connect</button>
   </div>
+
+  <div class="card" style="margin-top:16px;">
+    <h3>Trusted Device Manufacturers</h3>
+    <p style="color:#8b949e;font-size:12px;margin-bottom:12px;">
+      Manufacturers on this list can provision TEE devices whose attestation your node will accept.
+    </p>
+    <div id="trustListContainer"><p class="empty">Loading...</p></div>
+    <div style="display:flex;gap:8px;margin-top:12px;">
+      <input id="trustPkHex" placeholder="Manufacturer public key (hex)" style="flex:2;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:6px 10px;border-radius:6px;font-size:12px;font-family:'SF Mono',monospace;">
+      <input id="trustName" placeholder="Name" style="flex:1;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:6px 10px;border-radius:6px;font-size:13px;">
+      <button class="btn btn-primary" onclick="addTrustedManufacturer()">Add</button>
+    </div>
+    <div class="status" id="trustStatus" style="margin-top:6px;"></div>
+  </div>
 </div>
 
 <!-- ============================================================== -->
@@ -515,6 +544,13 @@ tr:hover td { background: #1c2128; }
 <!-- JavaScript                                                      -->
 <!-- ============================================================== -->
 <script>
+// ================================================================
+// Service Worker
+// ================================================================
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
+
 // ================================================================
 // State
 // ================================================================
@@ -582,11 +618,74 @@ async function connectNode() {
     renderCollection();
     loadAdvertiserInfo();
     loadSeederInfo();
+    loadTrustList();
     startAutoRefresh();
   } catch (e) {
     document.getElementById('settStatus').textContent = 'Failed: ' + e.message;
     document.getElementById('settStatus').className = 'status';
   }
+}
+
+// ================================================================
+// Trusted Manufacturers
+// ================================================================
+async function loadTrustList() {
+  if (!nodeUrl) return;
+  try {
+    const r = await fetch(nodeUrl + '/api/trusted-manufacturers');
+    const data = await r.json();
+    const items = data.items || [];
+    const container = document.getElementById('trustListContainer');
+    if (!items.length) {
+      container.innerHTML = '<p class="empty">No trusted manufacturers yet</p>';
+      return;
+    }
+    let html = '<table><tr><th>Name</th><th>Public Key</th><th></th></tr>';
+    items.forEach(m => {
+      html += `<tr>
+        <td>${m.name}</td>
+        <td class="mono">${m.pk_hex.slice(0, 20)}...${m.pk_hex.slice(-8)}</td>
+        <td><button class="btn" style="padding:2px 8px;font-size:11px;" onclick="removeTrustedManufacturer('${m.pk_hex}')">Remove</button></td>
+      </tr>`;
+    });
+    html += '</table>';
+    container.innerHTML = html;
+  } catch (e) {
+    document.getElementById('trustListContainer').innerHTML = '<p class="empty">Failed to load: ' + e.message + '</p>';
+  }
+}
+
+async function addTrustedManufacturer() {
+  const pk = document.getElementById('trustPkHex').value.trim();
+  const name = document.getElementById('trustName').value.trim();
+  const status = document.getElementById('trustStatus');
+  if (!pk || !name) { status.textContent = 'Both fields required'; status.style.color = '#f85149'; return; }
+  if (!nodeUrl) { status.textContent = 'Connect to node first'; status.style.color = '#f85149'; return; }
+  try {
+    const r = await fetch(nodeUrl + '/api/trusted-manufacturers', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ pk_hex: pk, name: name })
+    });
+    const data = await r.json();
+    if (r.ok) {
+      status.textContent = 'Added'; status.style.color = '#3fb950';
+      document.getElementById('trustPkHex').value = '';
+      document.getElementById('trustName').value = '';
+      loadTrustList();
+    } else {
+      status.textContent = data.error || 'Failed'; status.style.color = '#f85149';
+    }
+  } catch (e) {
+    status.textContent = 'Error: ' + e.message; status.style.color = '#f85149';
+  }
+}
+
+async function removeTrustedManufacturer(pkHex) {
+  if (!nodeUrl) return;
+  try {
+    await fetch(nodeUrl + '/api/trusted-manufacturers/' + pkHex, { method: 'DELETE' });
+    loadTrustList();
+  } catch (e) {}
 }
 
 // ================================================================
@@ -833,9 +932,11 @@ function renderCatalog() {
     }
     const owned = isPurchased(item.content_hash) ? '<span class="owned-badge">OWNED</span>' : '';
     const pre = item.pre_c1_hex ? '<span class="pre-badge">PRE</span>' : '';
+    const device = (item.playback_policy === 'device_required' || item.playback_policy === 'device_recommended')
+      ? '<span class="device-badge">DEVICE</span>' : '';
     div.innerHTML = `
       <div>
-        <div class="name">${item.file_name || 'Unknown'}${pre}${owned}</div>
+        <div class="name">${item.file_name || 'Unknown'}${pre}${device}${owned}</div>
         <div class="meta">${ext} &middot; ${fmtSize(item.size_bytes || 0)}${creator}</div>
       </div>
       <div class="price">${item.price_sats || 0} sats</div>
@@ -862,6 +963,17 @@ function selectItem(item) {
   const defaultMode = item.pre_c1_hex ? 'pre' : 'direct';
   const radio = document.querySelector(`input[name="buyMode"][value="${defaultMode}"]`);
   if (radio) radio.checked = true;
+  // Show device notice for TEE-required content
+  const notice = document.getElementById('deviceNotice');
+  if (item.playback_policy === 'device_required') {
+    notice.textContent = 'This content requires a verified TEE device for playback.';
+    notice.style.display = 'block';
+  } else if (item.playback_policy === 'device_recommended') {
+    notice.textContent = 'This content is best viewed on a verified TEE device.';
+    notice.style.display = 'block';
+  } else {
+    notice.style.display = 'none';
+  }
 }
 
 // ================================================================
