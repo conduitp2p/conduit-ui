@@ -176,6 +176,11 @@ tr:hover td { background: #1c2128; }
 .catalog-item.selected { border-color: #58a6ff; background: #1c2128; }
 .catalog-item .name { font-weight: 500; }
 .catalog-item .meta { font-size: 12px; color: #8b949e; }
+.catalog-item .owned-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  color: #3fb950; background: #1a2f1a; border: 1px solid #2a4a2a;
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
 
 /* ================================================================ */
 /* Ad overlay                                                        */
@@ -801,6 +806,10 @@ async function loadCatalog() {
   }
 }
 
+function isPurchased(contentHash) {
+  return purchases.some(p => p.content_hash === contentHash);
+}
+
 function renderCatalog() {
   const container = document.getElementById('libraryCatalog');
   container.innerHTML = '';
@@ -817,9 +826,10 @@ function renderCatalog() {
       try { creator = ' from ' + new URL(ensureHttp(item.creator_address)).hostname; }
       catch { creator = ' from ' + item.creator_address.replace(/:\d+$/, ''); }
     }
+    const owned = isPurchased(item.content_hash) ? '<span class="owned-badge">OWNED</span>' : '';
     div.innerHTML = `
       <div>
-        <div class="name">${item.file_name || 'Unknown'}</div>
+        <div class="name">${item.file_name || 'Unknown'}${owned}</div>
         <div class="meta">${ext} &middot; ${fmtSize(item.size_bytes || 0)}${creator}</div>
       </div>
       <div class="price">${item.price_sats || 0} sats</div>
@@ -855,6 +865,11 @@ function getMode() {
 
 async function doBuy() {
   if (!selectedItem) return;
+
+  if (isPurchased(selectedItem.content_hash)) {
+    if (!confirm('You already own this asset. Purchase again?')) return;
+  }
+
   const mode = getMode();
   document.getElementById('buyBtn').disabled = true;
   document.getElementById('buyResult').style.display = 'none';
@@ -1452,6 +1467,7 @@ function recordPurchase(data) {
   else purchases.unshift(purchase);
   localStorage.setItem('conduit_purchases', JSON.stringify(purchases));
   renderCollection();
+  renderCatalog();
 }
 
 function renderCollection() {
