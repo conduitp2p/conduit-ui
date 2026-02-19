@@ -281,6 +281,10 @@ tr:hover td { background: #1c2128; }
   <div class="card">
     <h3>Node Identity</h3>
     <p class="mono" id="walletNodeId">--</p>
+    <div id="p2pInfoBlock" style="display:none;margin-top:8px;padding:8px 12px;background:rgba(0,255,136,0.08);border-radius:8px;border:1px solid rgba(0,255,136,0.2);">
+      <span style="color:var(--green);font-weight:600;font-size:0.75rem;">P2P ENABLED</span>
+      <p class="mono" style="font-size:0.7rem;margin-top:4px;" id="p2pNodeId">--</p>
+    </div>
   </div>
   <div class="card">
     <h3>On-chain Wallet</h3>
@@ -710,6 +714,19 @@ async function updateWallet() {
   if (!nodeInfo) return;
   document.getElementById('nodeId').textContent = nodeInfo.node_id.slice(0, 12) + '...';
   document.getElementById('walletNodeId').textContent = nodeInfo.node_id;
+
+  try {
+    const p2pRes = await fetch(nodeUrl + '/api/p2p-info');
+    const p2pInfo = await p2pRes.json();
+    if (p2pInfo.enabled) {
+      document.getElementById('p2pInfoBlock').style.display = 'block';
+      document.getElementById('p2pNodeId').textContent = 'iroh: ' + p2pInfo.node_id;
+    } else {
+      document.getElementById('p2pInfoBlock').style.display = 'none';
+    }
+  } catch (e) {
+    document.getElementById('p2pInfoBlock').style.display = 'none';
+  }
   document.getElementById('wOnchain').textContent = (nodeInfo.onchain_balance_sats || 0).toLocaleString();
   document.getElementById('wLightning').textContent = (nodeInfo.lightning_balance_sats || 0).toLocaleString();
   document.getElementById('walletOnchain').textContent = (nodeInfo.onchain_balance_sats || 0).toLocaleString();
@@ -1817,6 +1834,12 @@ async function loadNetworkGraph() {
       selfPk = info.node_id;
       addNode(selfPk, 'self', nodeUrl, info.node_alias || '');
       addChannels(selfPk, info.channels);
+      try {
+        const p2p = await fetchJson(nodeUrl + '/api/p2p-info', 3000);
+        if (p2p && p2p.enabled && nodes.has(selfPk)) {
+          nodes.get(selfPk).p2pNodeId = p2p.node_id;
+        }
+      } catch (_) {}
     }
   } catch (e) {}
 
@@ -2017,6 +2040,7 @@ function renderNetworkGraph(container, nodeArr, linkArr, selfPk) {
     html += '<span class="tt-label">Node ID:</span> <span class="tt-value">' + d.id.slice(0, 24) + '...</span><br>';
     html += '<span class="tt-label">Role:</span> <span class="tt-value">' + d.role + '</span><br>';
     if (d.address) html += '<span class="tt-label">Address:</span> <span class="tt-value">' + d.address + '</span><br>';
+    if (d.p2pNodeId) html += '<span class="tt-label">P2P (iroh):</span> <span class="tt-value">' + d.p2pNodeId.slice(0, 16) + '...</span><br>';
     // Find channels for this node
     const nodeChannels = linkArr.filter(l => l.type === 'channel' && (l.source.id === d.id || l.target.id === d.id));
     if (nodeChannels.length) {
