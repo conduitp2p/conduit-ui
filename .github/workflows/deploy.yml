@@ -13,10 +13,11 @@ jobs:
 
       # Deploy dashboard.html to the path each node's --dashboard flag expects.
       # Service files reference:
-      #   Creator/Buyer:    /root/conduit/dashboard.html
-      #   Seeder 1 (AWS):   /home/ubuntu/conduit/dashboard.html
-      #   Seeder 2:         /root/conduit/dashboard.html
-      #   Advertiser:       /root/conduit/dashboard.html
+      #   Creator/Buyer:          /root/conduit/dashboard.html
+      #   Seeder 1 (AWS):         /home/ubuntu/conduit/dashboard.html
+      #   Seeder 2:               /root/conduit/dashboard.html
+      #   Advertiser:             /root/conduit/dashboard.html
+      #   DsgnDude/Peer7/Peer8:   /root/conduit-ui/dashboard.html
 
       - name: Deploy to Creator
         uses: appleboy/scp-action@v0.1.7
@@ -66,4 +67,34 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: "dashboard.html,buyer-ui.html"
           target: /root/conduit/
+          overwrite: true
+
+      - name: Deploy to DsgnDude
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DSGNDUDE_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "dashboard.html,buyer-ui.html"
+          target: /root/conduit-ui/
+          overwrite: true
+
+      - name: Deploy to Peer7
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PEER7_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "dashboard.html,buyer-ui.html"
+          target: /root/conduit-ui/
+          overwrite: true
+
+      - name: Deploy to Peer8
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.PEER8_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: "dashboard.html,buyer-ui.html"
+          target: /root/conduit-ui/
           overwrite: true

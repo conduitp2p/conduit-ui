@@ -2,6 +2,8 @@ const CACHE_NAME = 'conduit-v1';
 const SHELL_URLS = [
   '/',
   '/manifest.json',
+  'dashboard.css',
+  'dashboard.js',
   'https://d3js.org/d3.v7.min.js',
 ];
 

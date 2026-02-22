@@ -1,0 +1,281 @@
+/* ================================================================ */
+/* Reset & base                                                      */
+/* ================================================================ */
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0d1117; color: #e6edf3;
+  font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  font-size: 14px; min-height: 100vh;
+}
+a { color: #58a6ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ================================================================ */
+/* Layout                                                            */
+/* ================================================================ */
+.header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 24px; border-bottom: 1px solid #21262d;
+  background: #161b22;
+}
+.header h1 { font-size: 16px; font-weight: 700; color: #f0883e; letter-spacing: 0.02em; }
+.header .node-id { font-family: 'SF Mono', monospace; font-size: 11px; color: #8b949e; }
+
+.wallet-bar {
+  display: flex; gap: 24px; padding: 10px 24px; border-bottom: 1px solid #21262d;
+  background: #0d1117; font-size: 13px; flex-wrap: wrap; align-items: center;
+}
+.wallet-bar .stat { display: flex; gap: 6px; align-items: center; }
+.wallet-bar .stat-label { color: #8b949e; }
+.wallet-bar .stat-value { color: #e6edf3; font-weight: 600; }
+.wallet-bar .stat-value.btc { color: #f0883e; }
+
+.tab-bar {
+  display: flex; border-bottom: 1px solid #21262d; background: #161b22;
+  overflow-x: auto;
+}
+.tab-bar button {
+  background: none; border: none; color: #8b949e; font-family: inherit;
+  font-size: 13px; padding: 10px 20px; cursor: pointer; border-bottom: 2px solid transparent;
+  white-space: nowrap; transition: color 0.15s, border-color 0.15s;
+}
+.tab-bar button:hover { color: #e6edf3; }
+.tab-bar button.active { color: #e6edf3; border-bottom-color: #f0883e; font-weight: 600; }
+
+.tab-content { display: none; padding: 24px; max-width: 900px; margin: 0 auto; }
+.tab-content.active { display: block; }
+
+/* ================================================================ */
+/* Settings panel                                                    */
+/* ================================================================ */
+.settings {
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 16px 20px; margin-bottom: 24px;
+}
+.settings h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: #8b949e; margin-bottom: 10px; }
+.settings .row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.settings label { color: #8b949e; font-size: 12px; min-width: 80px; }
+.settings input {
+  flex: 1; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+  padding: 6px 10px; border-radius: 6px; font-family: inherit; font-size: 13px;
+}
+.settings input:focus { border-color: #58a6ff; outline: none; }
+.settings .status { font-size: 12px; color: #484f58; margin-top: 4px; }
+.settings .status.ok { color: #3fb950; }
+
+/* ================================================================ */
+/* Cards & tables                                                    */
+/* ================================================================ */
+.card {
+  background: #161b22; border: 1px solid #30363d; border-radius: 10px;
+  padding: 20px; margin-bottom: 16px;
+}
+.card h3 { font-size: 13px; font-weight: 600; margin-bottom: 12px; color: #e6edf3; }
+.card .empty { color: #484f58; font-size: 13px; font-style: italic; }
+
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left; color: #8b949e; font-weight: 500; padding: 8px 10px;
+  border-bottom: 1px solid #21262d; font-size: 11px; text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+td { padding: 8px 10px; border-bottom: 1px solid #161b22; }
+tr:hover td { background: #1c2128; }
+.mono { font-family: 'SF Mono', monospace; font-size: 11px; color: #8b949e; word-break: break-all; }
+.price { color: #f0883e; font-weight: 600; }
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 9999px;
+  font-size: 11px; font-weight: 600;
+}
+.badge-green { background: #1a2f1a; color: #3fb950; }
+.badge-yellow { background: #2f2a1a; color: #d29922; }
+.badge-red { background: #2f1a1a; color: #f85149; }
+.badge-blue { background: #1a1f2f; color: #58a6ff; }
+
+/* ================================================================ */
+/* Buttons                                                           */
+/* ================================================================ */
+.btn {
+  padding: 8px 16px; border: none; border-radius: 6px;
+  font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  transition: background 0.15s;
+}
+.btn-primary { background: #238636; color: #fff; }
+.btn-primary:hover { background: #2ea043; }
+.btn-primary:disabled { background: #21262d; color: #484f58; cursor: not-allowed; }
+.btn-secondary { background: #21262d; color: #e6edf3; }
+.btn-secondary:hover { background: #30363d; }
+
+/* ================================================================ */
+/* Steps / progress                                                  */
+/* ================================================================ */
+.step {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 8px; margin-bottom: 4px;
+  font-size: 13px; color: #8b949e; background: #161b22;
+}
+.step .num { min-width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; background: #21262d; color: #484f58; }
+.step.active { color: #e6edf3; background: #1c2128; }
+.step.active .num { background: #1f6feb; color: #fff; }
+.step.done { color: #3fb950; }
+.step.done .num { background: #1a2f1a; color: #3fb950; }
+.step.fail { color: #f85149; }
+.step.fail .num { background: #2f1a1a; color: #f85149; }
+.step .detail { font-size: 11px; color: #8b949e; margin-left: auto; }
+
+/* ================================================================ */
+/* Events timeline                                                   */
+/* ================================================================ */
+.event-item {
+  display: flex; gap: 10px; padding: 6px 0; border-bottom: 1px solid #161b22;
+  font-size: 12px;
+}
+.event-item .time { color: #484f58; min-width: 70px; font-family: 'SF Mono', monospace; font-size: 11px; }
+.event-item .role-tag {
+  display: inline-block; padding: 1px 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase; min-width: 60px; text-align: center;
+}
+.event-item .role-tag.creator { background: #1a2f1a; color: #3fb950; }
+.event-item .role-tag.buyer { background: #1a1f2f; color: #58a6ff; }
+.event-item .role-tag.seeder { background: #2f2a1a; color: #d29922; }
+.event-item .role-tag.advertiser { background: #2f1a2f; color: #bc8cff; }
+.event-item .type { color: #e6edf3; font-weight: 500; }
+.event-item .payload { color: #8b949e; font-family: 'SF Mono', monospace; font-size: 11px; word-break: break-all; }
+.event-filter { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
+.event-filter button {
+  background: #21262d; border: 1px solid #30363d; color: #8b949e;
+  padding: 4px 10px; border-radius: 4px; font-size: 11px; cursor: pointer;
+}
+.event-filter button.active { background: #30363d; color: #e6edf3; border-color: #58a6ff; }
+
+/* ================================================================ */
+/* Developer mode                                                    */
+/* ================================================================ */
+.dev-only { display: none !important; }
+body.dev-mode .dev-only { display: revert !important; }
+body.dev-mode .dev-only-flex { display: flex !important; }
+body.dev-mode .dev-only-block { display: block !important; }
+body.dev-mode .dev-only-table-cell { display: table-cell !important; }
+.dev-toggle {
+  display: flex; align-items: center; gap: 8px; margin-top: 16px;
+  padding: 10px 0; border-top: 1px solid #21262d;
+}
+.dev-toggle label { color: #8b949e; font-size: 12px; cursor: pointer; user-select: none; }
+.dev-toggle input { accent-color: #f0883e; }
+
+/* ================================================================ */
+/* Buy modes                                                         */
+/* ================================================================ */
+.mode-row { display: flex; gap: 12px; margin: 10px 0; align-items: center; }
+.mode-row label { color: #8b949e; font-size: 13px; cursor: pointer; }
+.mode-row input[type="radio"] { accent-color: #58a6ff; }
+
+/* ================================================================ */
+/* Catalog                                                           */
+/* ================================================================ */
+.catalog-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; transition: background 0.1s;
+}
+.catalog-item:hover { background: #1c2128; }
+.catalog-item.selected { border-color: #58a6ff; background: #1c2128; }
+.catalog-item .name { font-weight: 500; }
+.catalog-item .meta { font-size: 12px; color: #8b949e; }
+.catalog-item .owned-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  color: #3fb950; background: #1a2f1a; border: 1px solid #2a4a2a;
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
+.catalog-item .pre-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  color: #a371f7; background: #1f1a2e; border: 1px solid #362b54;
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
+.catalog-item .device-badge {
+  display: inline-block; font-size: 10px; font-weight: 600;
+  color: #f0883e; background: #2a1f0e; border: 1px solid #4a3520;
+  border-radius: 4px; padding: 1px 6px; margin-left: 6px; vertical-align: middle;
+}
+
+/* ================================================================ */
+/* Ad overlay                                                        */
+/* ================================================================ */
+#adOverlay {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.9); z-index: 1000;
+  flex-direction: column; align-items: center; justify-content: center;
+}
+#adOverlay video { max-width: 80%; max-height: 60%; border-radius: 8px; }
+#adTimer { color: #f0883e; font-size: 20px; font-weight: 700; margin-top: 16px; }
+#adProgressBar {
+  width: 60%; height: 4px; background: #21262d; border-radius: 2px; margin-top: 8px; overflow: hidden;
+}
+#adProgressBar .fill { height: 100%; background: #f0883e; width: 0; transition: width 1s linear; }
+
+/* ================================================================ */
+/* Preview                                                           */
+/* ================================================================ */
+.preview-container { margin-top: 16px; text-align: center; }
+.preview-container audio, .preview-container video { max-width: 100%; border-radius: 8px; }
+.preview-container img { max-width: 100%; max-height: 300px; border-radius: 8px; }
+
+/* ================================================================ */
+/* Network visualization                                             */
+/* ================================================================ */
+#tab-network { max-width: 100%; padding: 16px; }
+#tab-network .card { max-width: none; }
+#networkGraph { position: relative; background: #0d1117; border: 1px solid #21262d; border-radius: 8px; overflow: hidden; }
+#networkGraph svg { display: block; width: 100%; height: 100%; }
+.net-legend { display: flex; gap: 20px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: #8b949e; }
+.net-legend-item { display: flex; align-items: center; gap: 6px; }
+.net-legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.net-tooltip {
+  position: absolute; pointer-events: none; background: #161b22; border: 1px solid #30363d;
+  border-radius: 6px; padding: 10px 14px; font-size: 12px; color: #e6edf3; line-height: 1.6;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 100; white-space: nowrap; display: none;
+}
+.net-tooltip .tt-label { color: #8b949e; }
+.net-tooltip .tt-value { color: #e6edf3; font-weight: 600; }
+.net-status { font-size: 12px; color: #8b949e; margin-top: 8px; }
+
+/* ================================================================ */
+/* Onboarding wizard                                                 */
+/* ================================================================ */
+#onboardingOverlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: rgba(0,0,0,0.85); display: flex; align-items: center; justify-content: center;
+}
+#onboardingOverlay.hidden { display: none; }
+.onboard-card {
+  background: #161b22; border: 1px solid #30363d; border-radius: 14px;
+  padding: 32px 36px; max-width: 460px; width: 90%;
+}
+.onboard-card h2 { font-size: 18px; font-weight: 700; color: #f0883e; margin-bottom: 8px; }
+.onboard-card p { font-size: 13px; color: #8b949e; margin-bottom: 16px; line-height: 1.5; }
+.onboard-steps { display: flex; gap: 0; margin-bottom: 24px; }
+.onboard-step {
+  flex: 1; text-align: center; font-size: 11px; color: #484f58;
+  padding: 8px 4px; border-bottom: 2px solid #21262d; transition: all 0.2s;
+}
+.onboard-step.active { color: #f0883e; border-bottom-color: #f0883e; font-weight: 600; }
+.onboard-step.done { color: #3fb950; border-bottom-color: #3fb950; }
+.onboard-section { display: none; }
+.onboard-section.active { display: block; }
+.onboard-input {
+  width: 100%; background: #0d1117; border: 1px solid #30363d; color: #e6edf3;
+  padding: 10px 14px; border-radius: 8px; font-family: inherit; font-size: 14px;
+  margin-bottom: 12px;
+}
+.onboard-input:focus { border-color: #58a6ff; outline: none; }
+.onboard-status { font-size: 12px; margin-bottom: 12px; min-height: 18px; }
+.onboard-addr {
+  background: #0d1117; border: 1px solid #30363d; border-radius: 8px;
+  padding: 12px; font-family: 'SF Mono', monospace; font-size: 12px;
+  color: #e6edf3; word-break: break-all; cursor: pointer; text-align: center;
+}
+.onboard-balance {
+  text-align: center; font-size: 24px; font-weight: 700; color: #f0883e;
+  margin: 16px 0;
+}
+.onboard-nav { display: flex; justify-content: space-between; margin-top: 20px; }
