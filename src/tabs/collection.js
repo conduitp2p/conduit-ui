@@ -60,6 +60,44 @@ export function removePurchase(idx) {
   renderCollection();
 }
 
+export async function loadReceipts() {
+  const container = document.getElementById('receiptsList');
+  const emptyMsg = document.getElementById('noReceipts');
+  if (!container || !state.nodeUrl) return;
+  try {
+    const resp = await fetch(state.nodeUrl + '/api/receipts');
+    const data = await resp.json();
+    const items = data.receipts || [];
+    container.innerHTML = '';
+    if (emptyMsg) emptyMsg.style.display = items.length ? 'none' : 'block';
+    items.forEach(r => {
+      const div = document.createElement('div');
+      div.style.cssText = 'padding:12px;border:1px solid #21262d;border-radius:8px;margin-bottom:8px;background:#161b22;';
+      const date = r.timestamp ? new Date(r.timestamp * 1000).toLocaleDateString() : '';
+      const badge = r.valid
+        ? '<span style="color:#3fb950;font-size:11px;font-weight:600;">VERIFIED</span>'
+        : '<span style="color:#f0883e;font-size:11px;font-weight:600;">UNVERIFIED</span>';
+      const checksHtml = (r.checks || []).map(c =>
+        `<span style="color:${c.passed ? '#3fb950' : '#f85149'};font-size:10px;" title="${c.detail}">${c.passed ? '\u2713' : '\u2717'} ${c.name}</span>`
+      ).join(' &middot; ');
+      div.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <span style="font-weight:600;color:#e6edf3;">${r.file_name || 'Unknown'}</span>
+            <span style="font-size:11px;color:#8b949e;margin-left:8px;">${r.price_sats} sats &middot; ${date}</span>
+          </div>
+          ${badge}
+        </div>
+        <div style="margin-top:6px;">${checksHtml}</div>
+        ${state.devMode ? `<div class="mono" style="font-size:10px;color:#484f58;margin-top:4px;">${(r.content_hash || '').slice(0,32)}... &middot; creator: ${(r.creator_pubkey || '').slice(0,16)}...</div>` : ''}
+      `;
+      container.appendChild(div);
+    });
+  } catch (e) {
+    container.innerHTML = '<p style="color:#f85149;font-size:12px;">Failed to load receipts</p>';
+  }
+}
+
 export function tryPreview(data) {
   const container = document.getElementById('buyPreview');
   const file = data.output || data.path || '';

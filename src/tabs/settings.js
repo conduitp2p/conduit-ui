@@ -3,7 +3,7 @@ import { updateWallet, fetchAddress, loadPeerSuggestions, startAutoRefresh } fro
 import { connectSSE } from '../sse.js';
 import { loadCatalog } from './library.js';
 import { loadCreatorCatalog } from './creator.js';
-import { renderCollection } from './collection.js';
+import { renderCollection, loadReceipts } from './collection.js';
 import { loadAdvertiserInfo } from './advertiser.js';
 import { loadSeederInfo } from './seeder.js';
 
@@ -34,6 +34,7 @@ export async function connectNode() {
     loadCatalog();
     loadCreatorCatalog();
     renderCollection();
+    loadReceipts();
     loadAdvertiserInfo();
     loadSeederInfo();
     loadTrustList();
