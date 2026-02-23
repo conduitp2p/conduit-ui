@@ -1291,7 +1291,7 @@ function handleBuyerEvent(ev) {
       setStep('fetch', 'active', '0/' + (ev.data.chunks || '?') + ' chunks from ' + (ev.data.source || 'seeder'));
       break;
     case 'CHUNK_PROGRESS':
-      setStep('fetch', 'active', (ev.data.current || '?') + '/' + (ev.data.total || '?') + ' chunks');
+      setStep('fetch', 'active', (ev.data.received || ev.data.current || '?') + '/' + (ev.data.total || '?') + ' chunks');
       break;
     case 'CHUNKS_DOWNLOADED':
       setStep('fetch', 'done', fmtSize(ev.data.total_bytes || 0) + (ev.data.ics_mode ? ' (' + ev.data.ics_mode + ')' : ''));
